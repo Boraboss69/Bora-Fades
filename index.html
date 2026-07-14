@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bora Fades</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d0c0a; --bg-alt:#151310; --surface:#1b1815; --surface-2:#221e19; --border:#332c22;
+  --gold:#c6a15b; --gold-bright:#e3c284; --gold-dim:#8a723f;
+  --text:#f3ede1; --text-muted:#9c9284; --text-faint:#665f52;
+  --green:#5a9a6f; --green-bg:rgba(90,154,111,.14);
+  --yellow:#d6a23c; --yellow-bg:rgba(214,162,60,.14);
+  --red:#b5573d; --red-bg:rgba(181,87,61,.16);
+  --radius:14px; --shadow:0 12px 32px rgba(0,0,0,.45);
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{background:radial-gradient(ellipse 900px 500px at 15% -10%, rgba(198,161,91,.08), transparent 60%),var(--bg);color:var(--text);font-family:'Manrope',sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased;}
+h1,h2,h3,.display{font-family:'Fraunces',serif;}
+button{font-family:inherit;cursor:pointer;}
+input,select,textarea{font-family:inherit;}
+::selection{background:var(--gold-dim);color:#fff;}
+::-webkit-scrollbar{width:8px;height:8px;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:8px;}
+a{color:inherit;}
+.hidden{display:none !important;}
+
+#loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+.login-card{width:100%;max-width:380px;background:linear-gradient(180deg,var(--surface),var(--bg-alt));border:1px solid var(--border);border-radius:20px;padding:38px 32px 32px;box-shadow:var(--shadow);position:relative;overflow:hidden;}
+.login-card::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--gold),transparent);}
+.brand-mark{width:56px;height:56px;border-radius:50%;border:1.5px solid var(--gold-dim);display:flex;align-items:center;justify-content:center;margin:0 auto 18px;background:radial-gradient(circle at 35% 30%, rgba(198,161,91,.18), transparent 70%);}
+.brand-mark span{font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:19px;color:var(--gold-bright);}
+.login-card h1{text-align:center;font-size:24px;font-weight:500;margin:0 0 4px;letter-spacing:.2px;}
+.login-sub{text-align:center;color:var(--text-muted);font-size:13.5px;margin:0 0 28px;}
+.field{margin-bottom:16px;}
+.field label{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-faint);margin-bottom:7px;font-weight:600;}
+.field input{width:100%;background:var(--bg-alt);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:14.5px;outline:none;transition:border-color .15s;}
+.field input:focus{border-color:var(--gold-dim);}
+.btn{border:none;border-radius:10px;padding:12px 18px;font-size:14.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:transform .12s, opacity .15s, background .15s;}
+.btn:active{transform:scale(.97);}
+.btn-gold{background:linear-gradient(180deg,var(--gold-bright),var(--gold));color:#211a0d;width:100%;}
+.btn-gold:hover{filter:brightness(1.06);}
+.btn-ghost{background:transparent;color:var(--text-muted);border:1px solid var(--border);}
+.btn-ghost:hover{color:var(--text);border-color:var(--gold-dim);}
+.btn-outline-gold{background:transparent;border:1px solid var(--gold-dim);color:var(--gold-bright);}
+.btn-outline-gold:hover{background:rgba(198,161,91,.1);}
+.btn-danger{background:rgba(181,87,61,.15);color:#e5947c;border:1px solid rgba(181,87,61,.35);}
+.btn-danger:hover{background:rgba(181,87,61,.25);}
+.btn-sm{padding:8px 12px;font-size:12.5px;border-radius:8px;}
+.login-error{background:var(--red-bg);border:1px solid rgba(181,87,61,.35);color:#e5947c;font-size:12.5px;padding:9px 12px;border-radius:8px;margin-bottom:14px;text-align:center;}
+.login-links{margin-top:18px;text-align:center;}
+.login-links a{font-size:12.5px;color:var(--text-muted);text-decoration:none;}
+.login-links a:hover{color:var(--gold-bright);}
+
+#app{display:none;min-height:100vh;}
+.app-shell{display:flex;min-height:100vh;}
+.sidebar{width:230px;flex-shrink:0;background:var(--bg-alt);border-right:1px solid var(--border);padding:22px 16px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;}
+.sb-brand{display:flex;align-items:center;gap:10px;padding:4px 8px 26px;}
+.sb-brand .brand-mark{width:34px;height:34px;margin:0;}
+.sb-brand .brand-mark span{font-size:12px;}
+.sb-brand-text{display:flex;flex-direction:column;}
+.sb-brand-text b{font-family:'Fraunces',serif;font-size:15px;font-weight:500;}
+.sb-brand-text small{color:var(--text-faint);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;}
+.nav-group{display:flex;flex-direction:column;gap:3px;margin-bottom:8px;}
+.nav-item{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:9px;color:var(--text-muted);font-size:13.5px;font-weight:600;background:transparent;border:none;text-align:left;width:100%;position:relative;transition:background .15s,color .15s;}
+.nav-item svg{width:17px;height:17px;flex-shrink:0;opacity:.85;}
+.nav-item:hover{background:var(--surface);color:var(--text);}
+.nav-item.active{background:var(--surface-2);color:var(--gold-bright);}
+.nav-item.active::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:3px;background:linear-gradient(180deg,var(--gold-bright),var(--gold-dim));}
+.sidebar-foot{margin-top:auto;padding-top:14px;border-top:1px solid var(--border);}
+.who{display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;margin-bottom:8px;}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--gold-bright);flex-shrink:0;}
+.who-text b{display:block;font-size:12.5px;}
+.who-text small{color:var(--text-faint);font-size:10.5px;}
+
+.main{flex:1;min-width:0;padding:30px 34px 60px;max-width:1100px;}
+.topbar{display:none;}
+.page-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:26px;flex-wrap:wrap;gap:14px;}
+.page-head h2{font-size:26px;font-weight:500;margin:0;}
+.page-head p{color:var(--text-muted);font-size:13.5px;margin:4px 0 0;}
+
+.grid{display:grid;gap:16px;}
+.grid-3{grid-template-columns:repeat(3,1fr);}
+.grid-2{grid-template-columns:2fr 1fr;}
+@media(max-width:880px){.grid-3{grid-template-columns:1fr 1fr;}.grid-2{grid-template-columns:1fr;}}
+
+.card{background:linear-gradient(180deg,var(--surface),var(--bg-alt));border:1px solid var(--border);border-radius:var(--radius);padding:20px;}
+.stat-card{padding:18px 20px;}
+.stat-card .stat-label{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-faint);font-weight:700;margin-bottom:10px;}
+.stat-card .stat-value{font-family:'Fraunces',serif;font-size:30px;font-weight:500;color:var(--gold-bright);}
+.stat-card .stat-sub{font-size:12px;color:var(--text-muted);margin-top:4px;}
+
+.section-title{font-size:15px;font-weight:700;margin:0 0 14px;display:flex;align-items:center;justify-content:space-between;}
+.section-title span.tag{font-size:11px;background:var(--surface-2);color:var(--text-muted);padding:3px 9px;border-radius:20px;font-weight:600;}
+
+.list-row{display:flex;align-items:center;gap:12px;padding:12px 10px;border-radius:10px;border-bottom:1px solid var(--border);}
+.list-row:last-child{border-bottom:none;}
+.dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.dot-green{background:var(--green);} .dot-yellow{background:var(--yellow);} .dot-red{background:var(--red);} .dot-black{background:#555;border:1px solid #777;}
+.row-main{flex:1;min-width:0;}
+.row-main b{font-size:13.5px;display:block;}
+.row-main small{color:var(--text-muted);font-size:12px;}
+.pill{font-size:10.5px;font-weight:700;padding:4px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:.04em;flex-shrink:0;}
+.pill-green{background:var(--green-bg);color:#8bd6a2;} .pill-yellow{background:var(--yellow-bg);color:#eec168;} .pill-red{background:var(--red-bg);color:#e5947c;} .pill-gray{background:var(--surface-2);color:var(--text-muted);}
+
+.empty-state{padding:34px 18px;text-align:center;color:var(--text-faint);font-size:13px;}
+.empty-state svg{width:34px;height:34px;margin-bottom:10px;opacity:.5;}
+
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.cal-head .month-label{font-family:'Fraunces',serif;font-size:19px;font-weight:500;}
+.cal-nav{display:flex;gap:6px;}
+.icon-btn{width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--surface);color:var(--text-muted);display:flex;align-items:center;justify-content:center;}
+.icon-btn:hover{color:var(--gold-bright);border-color:var(--gold-dim);}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;font-size:11.5px;color:var(--text-muted);}
+.legend span{display:flex;align-items:center;gap:6px;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
+.cal-dow{text-align:center;font-size:10.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;padding-bottom:6px;font-weight:700;}
+.cal-day{aspect-ratio:1/1;border-radius:10px;border:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;position:relative;font-size:13px;font-weight:600;transition:border-color .15s,transform .1s;}
+.cal-day:not(.empty):hover{border-color:var(--gold-dim);transform:translateY(-1px);}
+.cal-day.empty{visibility:hidden;}
+.cal-day.today{box-shadow:inset 0 0 0 1.5px var(--gold-dim);}
+.cal-day .dots{display:flex;gap:3px;}
+.cal-day.tint-green{background:var(--green-bg);}
+.cal-day.tint-yellow{background:var(--yellow-bg);}
+.cal-day.tint-red{background:var(--red-bg);}
+.cal-day.tint-black{background:#1a1a1a;color:#666;}
+.cal-day.past{opacity:.35;}
+
+.slot-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;background:var(--surface);border:1px solid var(--border);margin-bottom:8px;flex-wrap:wrap;}
+.slot-action{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;}
+
+.cust-table{width:100%;border-collapse:collapse;}
+.cust-table th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);padding:0 10px 10px;font-weight:700;}
+.cust-table td{padding:12px 10px;border-top:1px solid var(--border);font-size:13px;vertical-align:middle;}
+.cust-table tr:hover td{background:rgba(255,255,255,.015);}
+.status-active{color:var(--green);} .status-locked{color:var(--red);}
+.table-actions{display:flex;gap:6px;flex-wrap:wrap;}
+
+.modal-overlay{position:fixed;inset:0;background:rgba(8,7,5,.72);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;}
+.modal{width:100%;max-width:440px;max-height:88vh;overflow-y:auto;background:linear-gradient(180deg,var(--surface),var(--bg-alt));border:1px solid var(--border);border-radius:18px;padding:26px;box-shadow:var(--shadow);}
+.modal h3{margin:0 0 4px;font-size:19px;font-weight:500;}
+.modal .modal-sub{color:var(--text-muted);font-size:12.5px;margin:0 0 20px;}
+.modal-actions{display:flex;gap:10px;margin-top:22px;}
+.modal-actions .btn{flex:1;}
+textarea{width:100%;background:var(--bg-alt);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:13.5px;resize:vertical;min-height:70px;outline:none;}
+textarea:focus, select:focus{border-color:var(--gold-dim);}
+select{width:100%;background:var(--bg-alt);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:13.5px;outline:none;appearance:none;}
+.field-row{display:flex;gap:10px;}
+.field-row .field{flex:1;}
+.copy-box{background:var(--bg-alt);border:1px dashed var(--border);border-radius:10px;padding:12px;font-size:12px;color:var(--text-muted);margin-bottom:12px;word-break:break-all;line-height:1.6;}
+.file-drop{border:1.5px dashed var(--border);border-radius:10px;padding:16px;text-align:center;font-size:12.5px;color:var(--text-faint);cursor:pointer;}
+.file-drop:hover{border-color:var(--gold-dim);color:var(--text-muted);}
+.file-preview{margin-top:10px;max-width:100%;border-radius:10px;border:1px solid var(--border);}
+.checkbox-row{display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:13px;color:var(--text-muted);}
+.checkbox-row input{width:16px;height:16px;}
+
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface-2);border:1px solid var(--gold-dim);color:var(--text);padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:all .25s;z-index:200;max-width:90vw;text-align:center;}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+.bottom-nav{display:none;}
+@media(max-width:880px){
+  .sidebar{display:none;}
+  .main{padding:20px 16px 100px;max-width:100%;}
+  .bottom-nav{display:flex;position:fixed;bottom:0;left:0;right:0;background:var(--bg-alt);border-top:1px solid var(--border);z-index:50;padding:6px 4px calc(6px + env(safe-area-inset-bottom));}
+  .bottom-nav .nav-item{align-items:center;justify-content:center;flex-direction:column;gap:3px;font-size:10px;flex:1;padding:8px 2px;}
+  .bottom-nav .nav-item.active::before{left:20%;right:20%;top:0;bottom:auto;height:2px;width:auto;}
+  .grid-3{grid-template-columns:1fr 1fr;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+}
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="brand-mark"><span>BF</span></div>
+    <h1>Bora Fades</h1>
+    <p class="login-sub">Nur auf Einladung. Melde dich mit deinen Zugangsdaten an.</p>
+    <div id="loginError" class="login-error hidden"></div>
+    <form id="loginForm">
+      <div class="field"><label>Benutzername</label><input id="loginUser" type="text" autocomplete="username" required></div>
+      <div class="field"><label>Passwort</label><input id="loginPass" type="password" autocomplete="current-password" required></div>
+      <button type="submit" class="btn btn-gold">Anmelden</button>
+    </form>
+    <div class="login-links"><a href="#" id="forgotLink">Passwort vergessen?</a></div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="app-shell">
+    <div class="sidebar" id="sidebar"></div>
+    <div class="main">
+      <div class="topbar" id="topbar"></div>
+      <div id="viewRoot"></div>
+    </div>
+  </div>
+  <div class="bottom-nav" id="bottomNav"></div>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toast"></div>
+
+<script>
+const ICONS = {
+  dashboard:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="12" width="8" height="9" rx="2"/><rect x="3" y="14" width="8" height="7" rx="2"/></svg>',
+  calendar:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+  users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c0-3.6 2.9-6.2 6.5-6.2s6.5 2.6 6.5 6.2M16 8.5a3 3 0 110-6M21.5 20c0-3-1.9-5.3-4.7-6"/></svg>',
+  settings:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.6V21a2 2 0 11-4 0v-.2a1.7 1.7 0 00-1-1.5 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.6-1H3a2 2 0 110-4h.2a1.7 1.7 0 001.5-1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3H9a1.7 1.7 0 001-1.6V3a2 2 0 114 0v.2a1.7 1.7 0 001 1.6 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9V9a1.7 1.7 0 001.6 1h.2a2 2 0 110 4h-.2a1.7 1.7 0 00-1.6 1z"/></svg>',
+  profile:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20.2c0-4.1 3.4-7 7.5-7s7.5 2.9 7.5 7"/></svg>',
+  logout:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>',
+  plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
+  chevL:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>',
+  chevR:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>',
+  empty:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>',
+};
+
+const STORAGE_KEY = 'bora-fades-data';
+const SLOT_START = 9, SLOT_END = 19;
+
+let DATA = null;
+let session = null;
+let currentView = 'dashboard';
+let calCursor = new Date(); calCursor.setDate(1);
+let selectedDay = null;
+
+function uid(p){ return p + '_' + Math.random().toString(36).slice(2,9); }
+function pad(n){ return String(n).padStart(2,'0'); }
+function fmtDate(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function parseDate(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
+function fmtDateHuman(s){ const d=parseDate(s); return d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'}); }
+function genPassword(){ return Math.random().toString(36).slice(-4)+Math.random().toString(36).slice(-4); }
+function initials(name){ return name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
+function timeOptions(){ const t=[]; for(let h=SLOT_START; h<=SLOT_END; h++){ if(h<SLOT_END) t.push(`${pad(h)}:00`,`${pad(h)}:30`); else t.push(`${pad(h)}:00`); } return t; }
+function addMinutes(hhmm, mins){ const [h,m]=hhmm.split(':').map(Number); const total=h*60+m+mins; const nh=Math.floor(total/60)%24, nm=total%60; return pad(nh)+':'+pad(nm); }
+function toMinutes(hhmm){ const [h,m]=hhmm.split(':').map(Number); return h*60+m; }
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+function loadData(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw) return migrate(JSON.parse(raw));
+  }catch(e){}
+  return seedData();
+}
+function saveData(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); document.title = DATA.ownerAuth.siteName; }
+  catch(e){ console.error(e); toast('Speichern fehlgeschlagen'); }
+}
+function seedData(){
+  return {
+    ownerAuth:{ username:'owner', password:'owner123', ownerName:'Owner', siteName:'Bora Fades' },
+    styles:['Klassischer Schnitt','Fade','Undercut','Bart Trim','Komplett-Service (Schnitt + Bart)'].map(n=>({id:uid('s'),name:n})),
+    customers:[],
+    appointments:[],
+    blocks:[]
+  };
+}
+function migrate(d){
+  d.ownerAuth = d.ownerAuth || {};
+  d.ownerAuth.username = d.ownerAuth.username || 'owner';
+  d.ownerAuth.password = d.ownerAuth.password || 'owner123';
+  d.ownerAuth.ownerName = d.ownerAuth.ownerName || 'Owner';
+  d.ownerAuth.siteName = d.ownerAuth.siteName || 'Bora Fades';
+  if(!Array.isArray(d.styles) || !d.styles.length){
+    d.styles = ['Klassischer Schnitt','Fade','Undercut','Bart Trim'].map(n=>({id:uid('s'),name:n}));
+  }
+  d.customers = d.customers || [];
+  d.appointments = (d.appointments||[]).map(a=>{
+    if(a.status==='requested' && !a.requestedFrom){
+      a.requestedFrom = a.start || '10:00';
+      a.requestedTo = addMinutes(a.requestedFrom, a.duration||30);
+    }
+    return a;
+  });
+  d.blocks = (d.blocks||[]).map(b=>{ if(!b.from){ b.from='09:00'; b.to='19:00'; } return b; });
+  return d;
+}
+function getStyleNames(){ return DATA.styles.map(s=>s.name); }
+
+let toastTimer;
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.classList.remove('show'), 2800);
+}
+
+function openModal(html){
+  document.getElementById('modalRoot').innerHTML = `<div class="modal-overlay" id="modalOverlay"><div class="modal">${html}</div></div>`;
+  document.getElementById('modalOverlay').addEventListener('click', (e)=>{ if(e.target.id==='modalOverlay') closeModal(); });
+}
+function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
+
+document.getElementById('loginForm').addEventListener('submit', (e)=>{
+  e.preventDefault();
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value;
+  const errEl = document.getElementById('loginError');
+  errEl.classList.add('hidden');
+
+  if(u === DATA.ownerAuth.username && p === DATA.ownerAuth.password){
+    session = { role:'owner' }; enterApp(); return;
+  }
+  const cust = DATA.customers.find(c => c.username === u);
+  if(cust && cust.password === p){
+    if(cust.status === 'locked'){
+      errEl.textContent = 'Dieser Account wurde gesperrt. Bitte wende dich an den Owner.';
+      errEl.classList.remove('hidden'); return;
+    }
+    session = { role:'kunde', customerId:cust.id }; enterApp(); return;
+  }
+  errEl.textContent = 'Benutzername oder Passwort ist falsch.';
+  errEl.classList.remove('hidden');
+});
+
+document.getElementById('forgotLink').addEventListener('click', (e)=>{
+  e.preventDefault();
+  openModal(forgotModal());
+  wireForgotModal();
+});
+
+function forgotModal(){
+  return `
+  <h3>Passwort zurücksetzen</h3>
+  <p class="modal-sub">Gib deinen Benutzernamen oder deine E-Mail-Adresse ein.</p>
+  <div id="forgotError" class="login-error hidden"></div>
+  <div class="field"><input id="forgotInput" placeholder="Benutzername oder E-Mail"></div>
+  <div class="modal-actions"><button class="btn btn-gold" id="forgotSubmitBtn">Neues Passwort anfordern</button></div>`;
+}
+function wireForgotModal(){
+  document.getElementById('forgotSubmitBtn').addEventListener('click', ()=>{
+    const val = document.getElementById('forgotInput').value.trim().toLowerCase();
+    const errEl = document.getElementById('forgotError');
+    let target = null, isOwner = false;
+    if(val === DATA.ownerAuth.username.toLowerCase()){ target = DATA.ownerAuth; isOwner = true; }
+    else{
+      target = DATA.customers.find(c => c.username.toLowerCase()===val || (c.email||'').toLowerCase()===val);
+    }
+    if(!target){
+      errEl.textContent = 'Kein Account mit diesen Angaben gefunden.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    const newPass = genPassword();
+    target.password = newPass;
+    saveData();
+    openModal(`
+      <h3>Neues Passwort generiert</h3>
+      <p class="modal-sub">Diese Website läuft ohne eigenen Server und kann daher keine echte E-Mail versenden. Zur Demonstration zeigen wir dir das neue Passwort direkt an:</p>
+      <div class="copy-box"><b>Benutzername:</b> ${isOwner?DATA.ownerAuth.username:target.username}<br><b>Neues Passwort:</b> ${newPass}</div>
+      <div class="modal-actions"><button class="btn btn-ghost" style="width:100%" id="closeModalBtn">Zum Login</button></div>`);
+    document.getElementById('closeModalBtn').addEventListener('click', closeModal);
+  });
+}
+
+function enterApp(){
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('app').style.display='block';
+  currentView = 'dashboard';
+  renderAll();
+}
+function logout(){
+  session = null;
+  document.getElementById('app').style.display='none';
+  document.getElementById('loginScreen').style.display='flex';
+  document.getElementById('loginForm').reset();
+}
+
+function navConfig(){
+  if(session.role==='owner'){
+    return [
+      {id:'dashboard', label:'Dashboard', icon:ICONS.dashboard},
+      {id:'calendar', label:'Kalender', icon:ICONS.calendar},
+      {id:'customers', label:'Kunden', icon:ICONS.users},
+      {id:'settings', label:'Einstellungen', icon:ICONS.settings},
+    ];
+  }
+  return [
+    {id:'dashboard', label:'Dashboard', icon:ICONS.dashboard},
+    {id:'calendar', label:'Kalender', icon:ICONS.calendar},
+    {id:'profile', label:'Profil', icon:ICONS.profile},
+  ];
+}
+
+function renderAll(){ renderSidebar(); renderBottomNav(); renderView(); }
+
+function renderSidebar(){
+  const items = navConfig();
+  const who = session.role==='owner' ? DATA.ownerAuth.ownerName : DATA.customers.find(c=>c.id===session.customerId).name;
+  const sub = session.role==='owner' ? 'Owner' : 'Kunde';
+  document.getElementById('sidebar').innerHTML = `
+    <div class="sb-brand">
+      <div class="brand-mark"><span>BF</span></div>
+      <div class="sb-brand-text"><b>${DATA.ownerAuth.siteName}</b><small>Geschlossener Zugang</small></div>
+    </div>
+    <div class="nav-group">
+      ${items.map(i=>`<button class="nav-item ${currentView===i.id?'active':''}" data-nav="${i.id}">${i.icon}<span>${i.label}</span></button>`).join('')}
+    </div>
+    <div class="sidebar-foot">
+      <div class="who"><div class="avatar">${initials(who)}</div><div class="who-text"><b>${who}</b><small>${sub}</small></div></div>
+      <button class="nav-item" id="logoutBtn">${ICONS.logout}<span>Abmelden</span></button>
+    </div>`;
+  document.querySelectorAll('#sidebar [data-nav]').forEach(b=>b.addEventListener('click', ()=>{ currentView=b.dataset.nav; renderAll(); }));
+  document.getElementById('logoutBtn').addEventListener('click', logout);
+}
+function renderBottomNav(){
+  const items = navConfig();
+  document.getElementById('bottomNav').innerHTML = items.map(i=>`<button class="nav-item ${currentView===i.id?'active':''}" data-navb="${i.id}">${i.icon}<span>${i.label}</span></button>`).join('')
+    + `<button class="nav-item" id="logoutBtnM">${ICONS.logout}<span>Abmelden</span></button>`;
+  document.querySelectorAll('#bottomNav [data-navb]').forEach(b=>b.addEventListener('click', ()=>{ currentView=b.dataset.navb; renderAll(); }));
+  document.getElementById('logoutBtnM').addEventListener('click', logout);
+}
+
+function renderView(){
+  const root = document.getElementById('viewRoot');
+  if(session.role==='owner'){
+    if(currentView==='dashboard') root.innerHTML = ownerDashboard();
+    else if(currentView==='calendar') root.innerHTML = calendarView(true);
+    else if(currentView==='customers') root.innerHTML = customersView();
+    else if(currentView==='settings') root.innerHTML = ownerSettingsView();
+  } else {
+    if(currentView==='dashboard') root.innerHTML = kundeDashboard();
+    else if(currentView==='calendar') root.innerHTML = calendarView(false);
+    else if(currentView==='profile') root.innerHTML = kundeProfileView();
+  }
+  attachViewHandlers();
+}
+
+function custById(id){ return DATA.customers.find(c=>c.id===id); }
+function apptsForDate(dateStr){ return DATA.appointments.filter(a=>a.date===dateStr); }
+function blocksForDate(dateStr){ return DATA.blocks.filter(b=>b.date===dateStr); }
+function isFullDayBlock(b){ return b.from==='09:00' && b.to==='19:00'; }
+function isPastDate(dateStr){ const d=parseDate(dateStr); const t=new Date(); t.setHours(0,0,0,0); return d<t; }
+
+function ownerDashboard(){
+  const todayStr = fmtDate(new Date());
+  const todays = apptsForDate(todayStr).filter(a=>a.status==='confirmed');
+  const requests = DATA.appointments.filter(a=>a.status==='requested').sort((a,b)=>a.date.localeCompare(b.date));
+  const activeCustomers = DATA.customers.filter(c=>c.status==='active').length;
+
+  return `
+  <div class="page-head"><div><h2>Übersicht</h2><p>Willkommen zurück, ${DATA.ownerAuth.ownerName}.</p></div></div>
+  <div class="grid grid-3" style="margin-bottom:18px;">
+    <div class="card stat-card"><div class="stat-label">Heutige Termine</div><div class="stat-value">${todays.length}</div><div class="stat-sub">bestätigt für heute</div></div>
+    <div class="card stat-card"><div class="stat-label">Neue Anfragen</div><div class="stat-value">${requests.length}</div><div class="stat-sub">warten auf Antwort</div></div>
+    <div class="card stat-card"><div class="stat-label">Aktive Kunden</div><div class="stat-value">${activeCustomers}</div><div class="stat-sub">von ${DATA.customers.length} insgesamt</div></div>
+  </div>
+  <div class="grid grid-2">
+    <div class="card">
+      <div class="section-title">Heutige Termine <span class="tag">${todayStr.split('-').reverse().join('.')}</span></div>
+      ${todays.length ? todays.map(a=>rowAppt(a)).join('') : emptyState('Keine bestätigten Termine für heute.')}
+    </div>
+    <div class="card">
+      <div class="section-title">Neue Anfragen</div>
+      ${requests.length ? requests.slice(0,5).map(a=>rowAppt(a)).join('') : emptyState('Keine offenen Anfragen.')}
+    </div>
+  </div>`;
+}
+function rowAppt(a){
+  const c = custById(a.customerId);
+  const timeLabel = a.status==='confirmed' ? `${a.start} Uhr · ${a.duration} Min.` : `Wunsch: ${a.requestedFrom}–${a.requestedTo} Uhr`;
+  return `<div class="list-row">
+    <span class="dot dot-${a.status==='confirmed'?'red':'yellow'}"></span>
+    <div class="row-main"><b>${c?c.name:'Unbekannt'} — ${a.style}</b><small>${fmtDateHuman(a.date)} · ${timeLabel}</small></div>
+    <span class="pill pill-${a.status==='confirmed'?'red':'yellow'}">${a.status==='confirmed'?'Bestätigt':'Angefragt'}</span>
+  </div>`;
+}
+function emptyState(msg){ return `<div class="empty-state">${ICONS.empty}<div>${msg}</div></div>`; }
+
+function ownerSettingsView(){
+  const o = DATA.ownerAuth;
+  return `
+  <div class="page-head"><div><h2>Einstellungen</h2><p>Profil, Zugang und Frisuren verwalten.</p></div></div>
+  <div class="grid grid-2">
+    <div class="card">
+      <div class="section-title">Dein Profil</div>
+      <form id="profileOwnerForm">
+        <div class="field"><label>Dein Name</label><input id="ownerNameInput" value="${o.ownerName}"></div>
+        <div class="field"><label>Seitenname</label><input id="siteNameInput" value="${o.siteName}"></div>
+        <button class="btn btn-outline-gold" type="submit">Speichern</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="section-title">Passwort ändern</div>
+      <form id="pwForm">
+        <div class="field"><label>Aktuelles Passwort</label><input type="password" id="pwCurrent" required></div>
+        <div class="field"><label>Neues Passwort</label><input type="password" id="pwNew" required minlength="4"></div>
+        <button class="btn btn-outline-gold" type="submit">Passwort aktualisieren</button>
+      </form>
+    </div>
+  </div>
+  <div class="card" style="margin-top:16px;">
+    <div class="section-title">Frisuren &amp; Stile</div>
+    <div id="stylesList">
+      ${DATA.styles.length ? DATA.styles.map(s=>`<div class="list-row"><div class="row-main"><b>${s.name}</b></div><button class="btn btn-sm btn-danger" data-style-del="${s.id}">Entfernen</button></div>`).join('') : emptyState('Noch keine Frisuren hinterlegt.')}
+    </div>
+    <div class="field-row" style="margin-top:14px;align-items:flex-end;">
+      <div class="field" style="margin-bottom:0;flex:1;"><input id="newStyleName" placeholder="Neue Frisur, z.B. Skin Fade"></div>
+      <button class="btn btn-outline-gold btn-sm" id="addStyleBtn">Hinzufügen</button>
+    </div>
+  </div>`;
+}
+
+function customersView(){
+  return `
+  <div class="page-head">
+    <div><h2>Kundenverwaltung</h2><p>Erstelle Einladungen und verwalte den Zugang deiner Kunden.</p></div>
+    <button class="btn btn-gold" id="newCustBtn" style="width:auto;">${ICONS.plus} Kunde erstellen</button>
+  </div>
+  <div class="card" style="padding:0;overflow-x:auto;">
+    <table class="cust-table">
+      <thead><tr><th>Kunde</th><th>Benutzername</th><th>Status</th><th>Lieblingsstil</th><th>Aktionen</th></tr></thead>
+      <tbody>
+        ${DATA.customers.length ? DATA.customers.map(c=>`
+        <tr>
+          <td><b>${c.name}</b><br><small style="color:var(--text-faint)">${c.email||'—'}</small></td>
+          <td>${c.username}</td>
+          <td class="status-${c.status==='active'?'active':'locked'}">${c.status==='active'?'Aktiv':'Gesperrt'}</td>
+          <td>${c.favoriteStyle||'—'}</td>
+          <td><div class="table-actions">
+            <button class="btn btn-sm btn-ghost" data-cust-view="${c.id}">Details</button>
+            <button class="btn btn-sm btn-ghost" data-cust-toggle="${c.id}">${c.status==='active'?'Sperren':'Entsperren'}</button>
+            <button class="btn btn-sm btn-danger" data-cust-del="${c.id}">Löschen</button>
+          </div></td>
+        </tr>`).join('') : `<tr><td colspan="5">${emptyState('Noch keine Kunden angelegt.')}</td></tr>`}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function customerDetailModal(c){
+  return `
+  <h3>${c.name}</h3>
+  <p class="modal-sub">Zugangsdaten &amp; Verwaltung</p>
+  <div class="copy-box"><b>Benutzername:</b> ${c.username}<br><b>Passwort:</b> ${c.password}<br><b>E-Mail:</b> ${c.email||'—'}<br><b>Status:</b> ${c.status==='active'?'Aktiv':'Gesperrt'}</div>
+  <div class="field"><label>Interne Notiz (nur für dich sichtbar)</label><textarea id="custNotes">${c.notes||''}</textarea></div>
+  <div class="modal-actions">
+    <button class="btn btn-outline-gold" id="saveNotesBtn">Notiz speichern</button>
+    <button class="btn btn-ghost" id="resetPwBtn">Passwort zurücksetzen</button>
+  </div>
+  <div class="modal-actions"><button class="btn btn-ghost" style="width:100%" id="closeModalBtn">Schließen</button></div>`;
+}
+function newCustomerModal(){
+  return `
+  <h3>Neuen Kunden erstellen</h3>
+  <p class="modal-sub">Es wird automatisch ein Zugang generiert.</p>
+  <div class="field"><label>Name</label><input id="newCustName" required></div>
+  <div class="field"><label>E-Mail (optional)</label><input id="newCustEmail" type="email"></div>
+  <div class="modal-actions"><button class="btn btn-gold" id="createCustBtn">Kunde erstellen</button></div>`;
+}
+function inviteResultModal(c){
+  const msg = `Hey ${c.name}! Du wurdest zu ${DATA.ownerAuth.siteName} eingeladen.\nBenutzername: ${c.username}\nStartpasswort: ${c.password}\n(Bitte nach dem ersten Login dein eigenes Passwort setzen.)`;
+  return `
+  <h3>Kunde erstellt</h3>
+  <p class="modal-sub">Sende diese Nachricht an ${c.name}.</p>
+  <div class="copy-box" id="inviteMsg">${msg.replace(/\n/g,'<br>')}</div>
+  <div class="modal-actions">
+    <button class="btn btn-outline-gold" id="copyInviteBtn">Nachricht kopieren</button>
+    <button class="btn btn-ghost" id="closeModalBtn">Fertig</button>
+  </div>`;
+}
+
+function kundeDashboard(){
+  const c = custById(session.customerId);
+  const now = fmtDate(new Date());
+  const upcoming = DATA.appointments.filter(a=>a.customerId===c.id && a.status!=='rejected' && a.date>=now).sort((a,b)=>a.date.localeCompare(b.date))[0];
+  const history = DATA.appointments.filter(a=>a.customerId===c.id).sort((a,b)=>b.date.localeCompare(a.date));
+  return `
+  <div class="page-head"><div><h2>Hallo, ${c.name.split(' ')[0]}</h2><p>Schön dich zu sehen. Hier ist dein nächster Termin.</p></div>
+    <button class="btn btn-gold" id="reqApptBtn" style="width:auto;">${ICONS.plus} Termin anfragen</button>
+  </div>
+  <div class="grid grid-2">
+    <div class="card">
+      <div class="section-title">Nächster Termin</div>
+      ${upcoming ? rowAppt(upcoming) : emptyState('Noch kein Termin geplant. Frag jetzt einen an.')}
+    </div>
+    <div class="card">
+      <div class="section-title">Verlauf</div>
+      ${history.length ? history.slice(0,5).map(a=>rowAppt(a)).join('') : emptyState('Noch keine Termine.')}
+    </div>
+  </div>`;
+}
+function kundeProfileView(){
+  const c = custById(session.customerId);
+  const styles = getStyleNames();
+  return `
+  <div class="page-head"><div><h2>Profil</h2><p>Deine persönlichen Daten und Einstellungen.</p></div></div>
+  <div class="grid grid-2">
+    <div class="card">
+      <div class="section-title">Persönliche Daten</div>
+      <form id="profileForm">
+        <div class="field"><label>Name</label><input id="pName" value="${c.name}" required></div>
+        <div class="field"><label>E-Mail</label><input id="pEmail" type="email" value="${c.email||''}"></div>
+        <div class="field"><label>Lieblingsfrisur</label>
+          <select id="pStyle">${styles.length?styles.map(s=>`<option ${c.favoriteStyle===s?'selected':''}>${s}</option>`).join(''):'<option>Keine verfügbar</option>'}</select>
+        </div>
+        <button class="btn btn-outline-gold" type="submit">Speichern</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="section-title">Passwort ändern</div>
+      <form id="custPwForm">
+        <div class="field"><label>Aktuelles Passwort</label><input type="password" id="cpwCurrent" required></div>
+        <div class="field"><label>Neues Passwort</label><input type="password" id="cpwNew" required minlength="4"></div>
+        <button class="btn btn-outline-gold" type="submit">Passwort aktualisieren</button>
+      </form>
+    </div>
+  </div>`;
+}
+
+function calendarView(isOwner){
+  const year = calCursor.getFullYear(), month = calCursor.getMonth();
+  const first = new Date(year, month, 1);
+  const startWeekday = (first.getDay()+6)%7;
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const monthLabel = calCursor.toLocaleDateString('de-DE',{month:'long', year:'numeric'});
+  const dowLabels = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+  const todayStr = fmtDate(new Date());
+
+  let cells = '';
+  for(let i=0;i<startWeekday;i++) cells += `<div class="cal-day empty"></div>`;
+  for(let d=1; d<=daysInMonth; d++){
+    const dateStr = `${year}-${pad(month+1)}-${pad(d)}`;
+    const blocks = blocksForDate(dateStr);
+    const fullBlock = blocks.some(isFullDayBlock);
+    const appts = apptsForDate(dateStr).filter(a=>a.status!=='rejected');
+    let tint = '';
+    if(fullBlock) tint='tint-black';
+    else if(appts.some(a=>a.status==='confirmed')) tint='tint-red';
+    else if(appts.some(a=>a.status==='requested')) tint='tint-yellow';
+    const dotColors = [...new Set(appts.map(a=>a.status==='confirmed'?'red':'yellow'))];
+    if(blocks.length && !fullBlock) dotColors.push('black');
+    const past = isPastDate(dateStr);
+    cells += `<button class="cal-day ${tint} ${dateStr===todayStr?'today':''} ${past?'past':''}" data-day="${dateStr}">
+      <span>${d}</span>
+      <span class="dots">${fullBlock?`<span class="dot dot-black"></span>`:dotColors.map(c=>`<span class="dot dot-${c}"></span>`).join('')}</span>
+    </button>`;
+  }
+
+  return `
+  <div class="page-head"><div><h2>Kalender</h2><p>${isOwner?'Verwalte Anfragen, Termine und blockierte Zeiten.':'Wähle einen Tag, um deinen Wunschzeitraum anzufragen.'}</p></div></div>
+  <div class="card">
+    <div class="cal-head">
+      <div class="cal-nav"><button class="icon-btn" id="prevMonth">${ICONS.chevL}</button></div>
+      <div class="month-label">${monthLabel}</div>
+      <div class="cal-nav"><button class="icon-btn" id="nextMonth">${ICONS.chevR}</button></div>
+    </div>
+    <div class="legend">
+      <span><span class="dot dot-green"></span> Frei</span>
+      <span><span class="dot dot-yellow"></span> Angefragt</span>
+      <span><span class="dot dot-red"></span> Bestätigt</span>
+      <span><span class="dot dot-black"></span> Blockiert</span>
+    </div>
+    <div class="cal-grid">
+      ${dowLabels.map(l=>`<div class="cal-dow">${l}</div>`).join('')}
+      ${cells}
+    </div>
+  </div>
+  <div id="dayDetail" style="margin-top:18px;"></div>`;
+}
+
+function dayDetailPanel(dateStr, isOwner){
+  const blocks = blocksForDate(dateStr);
+  const appts = apptsForDate(dateStr).filter(a=>a.status!=='rejected').sort((a,b)=>(a.start||a.requestedFrom).localeCompare(b.start||b.requestedFrom));
+  const past = isPastDate(dateStr);
+
+  let body = '';
+  blocks.forEach(b=>{
+    body += `<div class="slot-row"><span class="dot dot-black"></span><div class="row-main"><b>Blockiert · ${b.from}–${b.to} Uhr</b><small>${b.reason||'Kein Grund angegeben'}</small></div>
+      ${isOwner?`<div class="slot-action"><button class="btn btn-sm btn-ghost" data-unblock="${b.id}">Freigeben</button></div>`:''}
+    </div>`;
+  });
+  appts.forEach(a=>{
+    const c = custById(a.customerId);
+    const timeLabel = a.status==='confirmed' ? `${a.start} Uhr · ${a.duration} Min.` : `Wunsch: ${a.requestedFrom}–${a.requestedTo} Uhr`;
+    body += `<div class="slot-row">
+      <span class="dot dot-${a.status==='confirmed'?'red':'yellow'}"></span>
+      <div class="row-main"><b>${timeLabel} · ${a.style}${isOwner?` — ${c?c.name:'?'}`:''}</b><small>${a.comment?'"'+escapeHtml(a.comment)+'"':''}</small></div>
+      <div class="slot-action">
+        ${isOwner && a.status==='requested' ? `<button class="btn btn-sm btn-outline-gold" data-confirm="${a.id}">Bestätigen</button><button class="btn btn-sm btn-danger" data-reject="${a.id}">Ablehnen</button>`:''}
+        ${isOwner && a.status==='confirmed' ? `<button class="btn btn-sm btn-danger" data-reject="${a.id}">Absagen</button>`:''}
+        ${!isOwner ? `<span class="pill pill-${a.status==='confirmed'?'red':'yellow'}">${a.status==='confirmed'?'Bestätigt':'Angefragt'}</span>`:''}
+      </div>
+    </div>`;
+  });
+  if(!body) body = emptyState('Für diesen Tag liegen noch keine Termine vor.');
+
+  const ownerActions = isOwner && !past ? `<div class="modal-actions"><button class="btn btn-outline-gold btn-sm" id="blockDayBtn" style="width:auto;">Zeit blockieren</button></div>` : '';
+  const kundeAction = !isOwner && !past ? `<div class="modal-actions"><button class="btn btn-gold btn-sm" id="requestOnDayBtn" style="width:auto;">${ICONS.plus} Termin an diesem Tag anfragen</button></div>` : '';
+
+  return `<div class="card">
+    <div class="section-title">${fmtDateHuman(dateStr)}</div>
+    ${body}
+    ${ownerActions}
+    ${kundeAction}
+  </div>`;
+}
+
+function blockModal(dateStr){
+  const times = timeOptions();
+  return `
+  <h3>Zeit blockieren</h3>
+  <p class="modal-sub">${fmtDateHuman(dateStr)}</p>
+  <div class="checkbox-row"><input type="checkbox" id="fullDayChk"><label for="fullDayChk">Ganzer Tag</label></div>
+  <div class="field-row">
+    <div class="field"><label>Von</label><select id="blockFrom">${times.map(t=>`<option ${t==='09:00'?'selected':''}>${t}</option>`).join('')}</select></div>
+    <div class="field"><label>Bis</label><select id="blockTo">${times.map(t=>`<option ${t==='10:00'?'selected':''}>${t}</option>`).join('')}</select></div>
+  </div>
+  <div class="field"><label>Grund (optional)</label><input id="blockReason" placeholder="z.B. Mittagspause, Urlaub..."></div>
+  <div class="modal-actions"><button class="btn btn-gold" id="saveBlockBtn">Blockieren</button></div>`;
+}
+
+function confirmApptModal(a){
+  const c = custById(a.customerId);
+  const times = timeOptions();
+  return `
+  <h3>Termin bestätigen</h3>
+  <p class="modal-sub">${c?c.name:'Kunde'} — ${a.style}</p>
+  <div class="copy-box">Wunsch: ${fmtDateHuman(a.date)}, ${a.requestedFrom}–${a.requestedTo} Uhr${a.comment?'<br>Kommentar: '+escapeHtml(a.comment):''}</div>
+  <div class="field-row">
+    <div class="field"><label>Startzeit</label><select id="confirmStart">${times.map(t=>`<option ${t===a.requestedFrom?'selected':''}>${t}</option>`).join('')}</select></div>
+    <div class="field"><label>Dauer (Minuten)</label><input type="number" id="confirmDuration" min="10" step="5" value="30"></div>
+  </div>
+  <div class="modal-actions"><button class="btn btn-gold" id="saveConfirmBtn">Termin bestätigen</button></div>`;
+}
+
+function requestApptModal(prefDate){
+  const c = custById(session.customerId);
+  const styles = getStyleNames();
+  const dates = [];
+  for(let i=0;i<28;i++){ const d=new Date(); d.setDate(d.getDate()+i); dates.push(fmtDate(d)); }
+  const times = timeOptions();
+
+  return `
+  <h3>Termin anfragen</h3>
+  <p class="modal-sub">Gib deinen Wunschzeitraum an — der Owner bestätigt die genaue Uhrzeit.</p>
+  <div class="field"><label>Datum</label><select id="reqDate">${dates.map(d=>`<option value="${d}" ${d===prefDate?'selected':''}>${fmtDateHuman(d)}</option>`).join('')}</select></div>
+  <div class="field-row">
+    <div class="field"><label>Von</label><select id="reqFrom">${times.map((t,i)=>`<option ${i===2?'selected':''}>${t}</option>`).join('')}</select></div>
+    <div class="field"><label>Bis</label><select id="reqTo">${times.map((t,i)=>`<option ${i===6?'selected':''}>${t}</option>`).join('')}</select></div>
+  </div>
+  <div class="field"><label>Frisur</label><select id="reqStyle">${styles.length?styles.map(s=>`<option ${c.favoriteStyle===s?'selected':''}>${s}</option>`).join(''):'<option>Keine verfügbar</option>'}</select></div>
+  <div class="field"><label>Kommentar (optional)</label><textarea id="reqComment" placeholder="z.B. Wünsche zur Länge, Referenzen..."></textarea></div>
+  <div class="field"><label>Referenzbild (optional)</label>
+    <div class="file-drop" id="fileDrop">Bild auswählen oder hierher ziehen</div>
+    <input type="file" id="reqImage" accept="image/*" class="hidden">
+    <img id="filePreview" class="file-preview hidden">
+  </div>
+  <div class="modal-actions"><button class="btn btn-gold" id="submitReqBtn">Anfrage senden</button></div>`;
+}
+
+function attachViewHandlers(){
+  const profileOwnerForm = document.getElementById('profileOwnerForm');
+  if(profileOwnerForm) profileOwnerForm.addEventListener('submit', e=>{
+    e.preventDefault();
+    DATA.ownerAuth.ownerName = document.getElementById('ownerNameInput').value.trim()||DATA.ownerAuth.ownerName;
+    DATA.ownerAuth.siteName = document.getElementById('siteNameInput').value.trim()||DATA.ownerAuth.siteName;
+    saveData(); toast('Gespeichert'); renderAll();
+  });
+  const pwForm = document.getElementById('pwForm');
+  if(pwForm) pwForm.addEventListener('submit', e=>{
+    e.preventDefault();
+    const cur = document.getElementById('pwCurrent').value, nw = document.getElementById('pwNew').value;
+    if(cur !== DATA.ownerAuth.password){ toast('Aktuelles Passwort stimmt nicht.'); return; }
+    DATA.ownerAuth.password = nw; saveData(); toast('Passwort aktualisiert'); pwForm.reset();
+  });
+  const addStyleBtn = document.getElementById('addStyleBtn');
+  if(addStyleBtn) addStyleBtn.addEventListener('click', ()=>{
+    const input = document.getElementById('newStyleName');
+    const name = input.value.trim();
+    if(!name){ toast('Bitte einen Namen eingeben.'); return; }
+    DATA.styles.push({id:uid('s'), name}); saveData(); toast('Frisur hinzugefügt'); renderAll();
+  });
+  document.querySelectorAll('[data-style-del]').forEach(b=>b.addEventListener('click', ()=>{
+    if(DATA.styles.length<=1){ toast('Mindestens eine Frisur muss vorhanden sein.'); return; }
+    DATA.styles = DATA.styles.filter(s=>s.id!==b.dataset.styleDel); saveData(); toast('Frisur entfernt'); renderAll();
+  }));
+
+  const newBtn = document.getElementById('newCustBtn');
+  if(newBtn) newBtn.addEventListener('click', ()=>{
+    openModal(newCustomerModal());
+    document.getElementById('createCustBtn').addEventListener('click', ()=>{
+      const name = document.getElementById('newCustName').value.trim();
+      if(!name){ toast('Bitte einen Namen eingeben.'); return; }
+      const email = document.getElementById('newCustEmail').value.trim();
+      const username = name.toLowerCase().split(/\s+/)[0].replace(/[^a-z0-9]/g,'') + Math.floor(Math.random()*90+10);
+      const c = { id:uid('c'), name, email, username, password:genPassword(), status:'active', favoriteStyle:getStyleNames()[0]||'', notes:'', createdAt:fmtDate(new Date()) };
+      DATA.customers.push(c); saveData();
+      openModal(inviteResultModal(c));
+      document.getElementById('closeModalBtn').addEventListener('click', ()=>{ closeModal(); renderAll(); });
+      document.getElementById('copyInviteBtn').addEventListener('click', async ()=>{
+        const text = document.getElementById('inviteMsg').innerText;
+        try{ await navigator.clipboard.writeText(text); toast('Nachricht kopiert'); }
+        catch(e){ toast('Kopieren nicht möglich — bitte manuell markieren'); }
+      });
+    });
+  });
+  document.querySelectorAll('[data-cust-view]').forEach(b=>b.addEventListener('click', ()=>{
+    const c = custById(b.dataset.custView);
+    openModal(customerDetailModal(c));
+    document.getElementById('saveNotesBtn').addEventListener('click', ()=>{ c.notes = document.getElementById('custNotes').value; saveData(); toast('Notiz gespeichert'); });
+    document.getElementById('resetPwBtn').addEventListener('click', ()=>{ c.password = genPassword(); saveData(); toast('Neues Passwort generiert'); openModal(customerDetailModal(c)); document.getElementById('closeModalBtn').addEventListener('click', closeModal); });
+    document.getElementById('closeModalBtn').addEventListener('click', closeModal);
+  }));
+  document.querySelectorAll('[data-cust-toggle]').forEach(b=>b.addEventListener('click', ()=>{
+    const c = custById(b.dataset.custToggle); c.status = c.status==='active'?'locked':'active'; saveData(); toast(c.status==='active'?'Kunde entsperrt':'Kunde gesperrt'); renderAll();
+  }));
+  document.querySelectorAll('[data-cust-del]').forEach(b=>b.addEventListener('click', ()=>{
+    if(!confirm('Diesen Kunden wirklich löschen? Alle Termine bleiben zu Referenzzwecken erhalten.')) return;
+    DATA.customers = DATA.customers.filter(c=>c.id!==b.dataset.custDel); saveData(); toast('Kunde gelöscht'); renderAll();
+  }));
+
+  const profileForm = document.getElementById('profileForm');
+  if(profileForm) profileForm.addEventListener('submit', e=>{
+    e.preventDefault();
+    const c = custById(session.customerId);
+    c.name = document.getElementById('pName').value.trim()||c.name;
+    c.email = document.getElementById('pEmail').value.trim();
+    c.favoriteStyle = document.getElementById('pStyle').value;
+    saveData(); toast('Profil gespeichert'); renderAll();
+  });
+  const custPwForm = document.getElementById('custPwForm');
+  if(custPwForm) custPwForm.addEventListener('submit', e=>{
+    e.preventDefault();
+    const c = custById(session.customerId);
+    const cur = document.getElementById('cpwCurrent').value, nw = document.getElementById('cpwNew').value;
+    if(cur !== c.password){ toast('Aktuelles Passwort stimmt nicht.'); return; }
+    c.password = nw; saveData(); toast('Passwort aktualisiert'); custPwForm.reset();
+  });
+  const reqApptBtn = document.getElementById('reqApptBtn');
+  if(reqApptBtn) reqApptBtn.addEventListener('click', ()=>{ openModal(requestApptModal(null)); wireRequestModal(); });
+
+  const prevM = document.getElementById('prevMonth'); if(prevM) prevM.addEventListener('click', ()=>{ calCursor.setMonth(calCursor.getMonth()-1); selectedDay=null; renderView(); });
+  const nextM = document.getElementById('nextMonth'); if(nextM) nextM.addEventListener('click', ()=>{ calCursor.setMonth(calCursor.getMonth()+1); selectedDay=null; renderView(); });
+  document.querySelectorAll('[data-day]').forEach(b=>b.addEventListener('click', ()=>{
+    selectedDay = b.dataset.day;
+    document.getElementById('dayDetail').innerHTML = dayDetailPanel(selectedDay, session.role==='owner');
+    wireDayDetail();
+    document.getElementById('dayDetail').scrollIntoView({behavior:'smooth', block:'nearest'});
+  }));
+  if(selectedDay){ const dd=document.getElementById('dayDetail'); if(dd){ dd.innerHTML = dayDetailPanel(selectedDay, session.role==='owner'); wireDayDetail(); } }
+}
+
+function wireRequestModal(){
+  const dropZone = document.getElementById('fileDrop');
+  const fileInput = document.getElementById('reqImage');
+  let imageData = null;
+  dropZone.addEventListener('click', ()=>fileInput.click());
+  fileInput.addEventListener('change', ()=>{
+    const f = fileInput.files[0]; if(!f) return;
+    if(f.size > 3*1024*1024){ toast('Bild zu groß (max. 3 MB)'); return; }
+    const reader = new FileReader();
+    reader.onload = ()=>{ imageData = reader.result; const prev=document.getElementById('filePreview'); prev.src=imageData; prev.classList.remove('hidden'); dropZone.textContent='Bild ausgewählt'; };
+    reader.readAsDataURL(f);
+  });
+  document.getElementById('submitReqBtn').addEventListener('click', ()=>{
+    if(!getStyleNames().length){ toast('Es sind noch keine Frisuren hinterlegt.'); return; }
+    const date = document.getElementById('reqDate').value;
+    const from = document.getElementById('reqFrom').value;
+    const to = document.getElementById('reqTo').value;
+    if(toMinutes(to) <= toMinutes(from)){ toast('"Bis" muss nach "Von" liegen.'); return; }
+    const style = document.getElementById('reqStyle').value;
+    const comment = document.getElementById('reqComment').value.trim();
+    const a = { id:uid('a'), customerId:session.customerId, date, requestedFrom:from, requestedTo:to, style, comment, image:imageData, status:'requested', start:null, duration:null, createdAt:fmtDate(new Date()) };
+    DATA.appointments.push(a); saveData(); closeModal(); toast('Anfrage gesendet');
+    selectedDay = date; renderView();
+  });
+}
+function wireDayDetail(){
+  const blockBtn = document.getElementById('blockDayBtn');
+  if(blockBtn) blockBtn.addEventListener('click', ()=>{
+    openModal(blockModal(selectedDay));
+    const fullChk = document.getElementById('fullDayChk');
+    const fromSel = document.getElementById('blockFrom'), toSel = document.getElementById('blockTo');
+    fullChk.addEventListener('change', ()=>{
+      if(fullChk.checked){ fromSel.value='09:00'; toSel.value='19:00'; fromSel.disabled=true; toSel.disabled=true; }
+      else{ fromSel.disabled=false; toSel.disabled=false; }
+    });
+    document.getElementById('saveBlockBtn').addEventListener('click', ()=>{
+      const from = fromSel.value, to = toSel.value;
+      if(toMinutes(to) <= toMinutes(from)){ toast('"Bis" muss nach "Von" liegen.'); return; }
+      const reason = document.getElementById('blockReason').value.trim();
+      DATA.blocks.push({ id:uid('b'), date:selectedDay, from, to, reason }); saveData(); closeModal(); toast('Zeit blockiert'); renderView();
+    });
+  });
+  document.querySelectorAll('[data-unblock]').forEach(b=>b.addEventListener('click', ()=>{
+    DATA.blocks = DATA.blocks.filter(bl=>bl.id!==b.dataset.unblock); saveData(); toast('Freigegeben'); renderView();
+  }));
+  document.querySelectorAll('[data-confirm]').forEach(b=>b.addEventListener('click', ()=>{
+    const a = DATA.appointments.find(x=>x.id===b.dataset.confirm);
+    openModal(confirmApptModal(a));
+    document.getElementById('saveConfirmBtn').addEventListener('click', ()=>{
+      a.start = document.getElementById('confirmStart').value;
+      a.duration = parseInt(document.getElementById('confirmDuration').value,10) || 30;
+      a.status = 'confirmed';
+      saveData(); closeModal(); toast('Termin bestätigt'); renderView();
+    });
+  }));
+  document.querySelectorAll('[data-reject]').forEach(b=>b.addEventListener('click', ()=>{
+    const a = DATA.appointments.find(x=>x.id===b.dataset.reject); a.status='rejected'; saveData(); toast('Termin abgelehnt'); renderView();
+  }));
+  const reqOnDay = document.getElementById('requestOnDayBtn');
+  if(reqOnDay) reqOnDay.addEventListener('click', ()=>{ openModal(requestApptModal(selectedDay)); wireRequestModal(); });
+}
+
+DATA = loadData();
+document.title = DATA.ownerAuth.siteName;
+</script>
+</body>
+</html>
