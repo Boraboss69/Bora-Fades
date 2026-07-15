@@ -236,7 +236,7 @@ function fmtDate(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.g
 function parseDate(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
 function fmtDateHuman(s){ const d=parseDate(s); return d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'}); }
 function initials(name){ return name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
-function timeOptions(){ const t=[]; for(let h=SLOT_START; h<=SLOT_END; h++){ if(h<SLOT_END) t.push(`${pad(h)}:00`,`${pad(h)}:30`); else t.push(`${pad(h)}:00`); } return t; }
+function timeOptions(){ const t=[]; for(let m=SLOT_START*60; m<=SLOT_END*60; m+=5){ t.push(`${pad(Math.floor(m/60))}:${pad(m%60)}`); } return t; }
 function toMinutes(hhmm){ const [h,m]=hhmm.split(':').map(Number); return h*60+m; }
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function getStyleNames(){ return DATA.styles.map(s=>s.name); }
@@ -322,28 +322,26 @@ document.getElementById('forgotLink').addEventListener('click', (e)=>{
 function forgotModal(){
   return `
   <h3>Passwort zurücksetzen</h3>
-  <p class="modal-sub">Gib deinen Namen, Benutzernamen und deine hinterlegte E-Mail-Adresse ein. Du bekommst dann eine E-Mail mit einem Link zum Zurücksetzen.</p>
+  <p class="modal-sub">Gib deinen Benutzernamen und deine hinterlegte E-Mail-Adresse ein. Du bekommst dann eine E-Mail mit einem Link zum Zurücksetzen.</p>
   <div id="forgotError" class="login-error hidden"></div>
-  <div class="field"><label>Name</label><input id="forgotName" placeholder="Vor- und Nachname"></div>
   <div class="field"><label>Benutzername</label><input id="forgotUser" placeholder="Benutzername"></div>
   <div class="field"><label>E-Mail</label><input id="forgotEmail" type="email" placeholder="E-Mail-Adresse"></div>
   <div class="modal-actions"><button class="btn btn-gold" id="forgotSubmitBtn">E-Mail zum Zurücksetzen senden</button></div>`;
 }
 function wireForgotModal(){
   document.getElementById('forgotSubmitBtn').addEventListener('click', async ()=>{
-    const name = document.getElementById('forgotName').value.trim();
     const username = document.getElementById('forgotUser').value.trim();
     const email = document.getElementById('forgotEmail').value.trim();
     const errEl = document.getElementById('forgotError');
     errEl.classList.add('hidden');
-    if(!name || !username || !email){
-      errEl.textContent = 'Bitte alle drei Felder ausfüllen.';
+    if(!username || !email){
+      errEl.textContent = 'Bitte beide Felder ausfüllen.';
       errEl.classList.remove('hidden');
       return;
     }
-    const { data, error } = await sb.functions.invoke('forgot-password', { body: { name, username, email } });
+    const { data, error } = await sb.functions.invoke('forgot-password', { body: { username, email } });
     if(error || !data || data.error === 'not_found'){
-      errEl.textContent = 'Kein Account mit diesen Angaben gefunden. Bitte Name, Benutzername und E-Mail genau prüfen.';
+      errEl.textContent = 'Kein Account mit diesen Angaben gefunden. Bitte Benutzername und E-Mail genau prüfen.';
       errEl.classList.remove('hidden');
       return;
     }
@@ -407,6 +405,7 @@ function openFirstLoginModal(){
     <div class="field"><label>Dein Name</label><input id="setupName" value="${escapeHtml(c.name)}" required></div>
     <div class="field"><label>E-Mail</label><input id="setupEmail" type="email" value="${escapeHtml(c.email||'')}" required></div>
     <div class="field"><label>Neues Passwort</label><input id="setupPw" type="password" minlength="4" required></div>
+    <div class="field"><label>Passwort wiederholen</label><input id="setupPwConfirm" type="password" minlength="4" required></div>
     <div class="modal-actions"><button class="btn btn-gold" id="setupSubmitBtn">Los geht's</button></div>`,
     { blocking: true }
   );
@@ -414,9 +413,14 @@ function openFirstLoginModal(){
     const name = document.getElementById('setupName').value.trim();
     const email = document.getElementById('setupEmail').value.trim();
     const pw = document.getElementById('setupPw').value;
+    const pwConfirm = document.getElementById('setupPwConfirm').value;
     const errEl = document.getElementById('setupError');
     if(!name || !email || !pw || pw.length < 4){
       errEl.textContent = 'Bitte alle Felder ausfüllen (Passwort mind. 4 Zeichen).';
+      errEl.classList.remove('hidden'); return;
+    }
+    if(pw !== pwConfirm){
+      errEl.textContent = 'Die Passwörter stimmen nicht überein.';
       errEl.classList.remove('hidden'); return;
     }
     const { data, error } = await sb.rpc('rpc_complete_first_login', { p_token: session.token, p_name: name, p_email: email, p_new_password: pw });
@@ -561,6 +565,7 @@ function ownerSettingsView(){
       <form id="pwForm">
         <div class="field"><label>Aktuelles Passwort</label><input type="password" id="pwCurrent" required></div>
         <div class="field"><label>Neues Passwort</label><input type="password" id="pwNew" required minlength="4"></div>
+        <div class="field"><label>Neues Passwort wiederholen</label><input type="password" id="pwNewConfirm" required minlength="4"></div>
         <button class="btn btn-outline-gold" type="submit">Passwort aktualisieren</button>
       </form>
     </div>
@@ -685,6 +690,7 @@ function kundeProfileView(){
       <form id="custPwForm">
         <div class="field"><label>Aktuelles Passwort</label><input type="password" id="cpwCurrent" required></div>
         <div class="field"><label>Neues Passwort</label><input type="password" id="cpwNew" required minlength="4"></div>
+        <div class="field"><label>Neues Passwort wiederholen</label><input type="password" id="cpwNewConfirm" required minlength="4"></div>
         <button class="btn btn-outline-gold" type="submit">Passwort aktualisieren</button>
       </form>
     </div>
@@ -821,8 +827,8 @@ function requestApptModal(prefDate){
   <p class="modal-sub">Gib deinen Wunschzeitraum an — der Owner bestätigt die genaue Uhrzeit.</p>
   <div class="field"><label>Datum</label><select id="reqDate">${dates.map(d=>`<option value="${d}" ${d===prefDate?'selected':''}>${fmtDateHuman(d)}</option>`).join('')}</select></div>
   <div class="field-row">
-    <div class="field"><label>Von</label><select id="reqFrom">${times.map((t,i)=>`<option ${i===2?'selected':''}>${t}</option>`).join('')}</select></div>
-    <div class="field"><label>Bis</label><select id="reqTo">${times.map((t,i)=>`<option ${i===6?'selected':''}>${t}</option>`).join('')}</select></div>
+    <div class="field"><label>Von</label><select id="reqFrom">${times.map(t=>`<option ${t==='10:00'?'selected':''}>${t}</option>`).join('')}</select></div>
+    <div class="field"><label>Bis</label><select id="reqTo">${times.map(t=>`<option ${t==='10:30'?'selected':''}>${t}</option>`).join('')}</select></div>
   </div>
   <div class="field"><label>Frisur</label><select id="reqStyle">${styles.length?styles.map(s=>`<option ${c.favoriteStyle===s?'selected':''}>${s}</option>`).join(''):'<option>Keine verfügbar</option>'}</select></div>
   <div class="field"><label>Kommentar (optional)</label><textarea id="reqComment" placeholder="z.B. Wünsche zur Länge, Referenzen..."></textarea></div>
@@ -847,7 +853,8 @@ function attachViewHandlers(){
   const pwForm = document.getElementById('pwForm');
   if(pwForm) pwForm.addEventListener('submit', async e=>{
     e.preventDefault();
-    const cur = document.getElementById('pwCurrent').value, nw = document.getElementById('pwNew').value;
+    const cur = document.getElementById('pwCurrent').value, nw = document.getElementById('pwNew').value, nwConfirm = document.getElementById('pwNewConfirm').value;
+    if(nw !== nwConfirm){ toast('Die neuen Passwörter stimmen nicht überein.'); return; }
     const { data } = await sb.rpc('rpc_change_owner_password', { p_token: session.token, p_current: cur, p_new: nw });
     if(data && data.error){ toast('Aktuelles Passwort stimmt nicht.'); return; }
     toast('Passwort aktualisiert'); pwForm.reset();
@@ -924,7 +931,8 @@ function attachViewHandlers(){
   const custPwForm = document.getElementById('custPwForm');
   if(custPwForm) custPwForm.addEventListener('submit', async e=>{
     e.preventDefault();
-    const cur = document.getElementById('cpwCurrent').value, nw = document.getElementById('cpwNew').value;
+    const cur = document.getElementById('cpwCurrent').value, nw = document.getElementById('cpwNew').value, nwConfirm = document.getElementById('cpwNewConfirm').value;
+    if(nw !== nwConfirm){ toast('Die neuen Passwörter stimmen nicht überein.'); return; }
     const { data } = await sb.rpc('rpc_change_customer_password', { p_token: session.token, p_current: cur, p_new: nw });
     if(data && data.error){ toast('Aktuelles Passwort stimmt nicht.'); return; }
     toast('Passwort aktualisiert'); custPwForm.reset();
