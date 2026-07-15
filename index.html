@@ -203,7 +203,13 @@ select{width:100%;background:var(--bg-alt);border:1px solid var(--border);color:
 <div id="modalRoot"></div>
 <div id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+const SUPABASE_URL = 'https://xgjwdnbhpashoqhrcbwe.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_435Os0-bY0-TRaaJOYVSWw_HjEyhyTJ';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const SESSION_KEY = 'bf-fades-session-token';
+
 const ICONS = {
   dashboard:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="12" width="8" height="9" rx="2"/><rect x="3" y="14" width="8" height="7" rx="2"/></svg>',
   calendar:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
@@ -217,7 +223,6 @@ const ICONS = {
   empty:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>',
 };
 
-const STORAGE_KEY = 'bora-fades-data';
 const SLOT_START = 9, SLOT_END = 19;
 
 let DATA = null;
@@ -226,59 +231,42 @@ let currentView = 'dashboard';
 let calCursor = new Date(); calCursor.setDate(1);
 let selectedDay = null;
 
-function uid(p){ return p + '_' + Math.random().toString(36).slice(2,9); }
 function pad(n){ return String(n).padStart(2,'0'); }
 function fmtDate(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
 function parseDate(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
 function fmtDateHuman(s){ const d=parseDate(s); return d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'}); }
-function genPassword(){ return Math.random().toString(36).slice(-4)+Math.random().toString(36).slice(-4); }
 function initials(name){ return name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
 function timeOptions(){ const t=[]; for(let h=SLOT_START; h<=SLOT_END; h++){ if(h<SLOT_END) t.push(`${pad(h)}:00`,`${pad(h)}:30`); else t.push(`${pad(h)}:00`); } return t; }
-function addMinutes(hhmm, mins){ const [h,m]=hhmm.split(':').map(Number); const total=h*60+m+mins; const nh=Math.floor(total/60)%24, nm=total%60; return pad(nh)+':'+pad(nm); }
 function toMinutes(hhmm){ const [h,m]=hhmm.split(':').map(Number); return h*60+m; }
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
-
-function loadData(){
-  try{
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if(raw) return migrate(JSON.parse(raw));
-  }catch(e){}
-  return seedData();
-}
-function saveData(){
-  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); document.title = DATA.ownerAuth.siteName; }
-  catch(e){ console.error(e); toast('Speichern fehlgeschlagen'); }
-}
-function seedData(){
-  return {
-    ownerAuth:{ username:'owner', password:'owner123', ownerName:'Owner', siteName:'Bora Fades' },
-    styles:['Klassischer Schnitt','Fade','Undercut','Bart Trim','Komplett-Service (Schnitt + Bart)'].map(n=>({id:uid('s'),name:n})),
-    customers:[],
-    appointments:[],
-    blocks:[]
-  };
-}
-function migrate(d){
-  d.ownerAuth = d.ownerAuth || {};
-  d.ownerAuth.username = d.ownerAuth.username || 'owner';
-  d.ownerAuth.password = d.ownerAuth.password || 'owner123';
-  d.ownerAuth.ownerName = d.ownerAuth.ownerName || 'Owner';
-  d.ownerAuth.siteName = d.ownerAuth.siteName || 'Bora Fades';
-  if(!Array.isArray(d.styles) || !d.styles.length){
-    d.styles = ['Klassischer Schnitt','Fade','Undercut','Bart Trim'].map(n=>({id:uid('s'),name:n}));
-  }
-  d.customers = d.customers || [];
-  d.appointments = (d.appointments||[]).map(a=>{
-    if(a.status==='requested' && !a.requestedFrom){
-      a.requestedFrom = a.start || '10:00';
-      a.requestedTo = addMinutes(a.requestedFrom, a.duration||30);
-    }
-    return a;
-  });
-  d.blocks = (d.blocks||[]).map(b=>{ if(!b.from){ b.from='09:00'; b.to='19:00'; } return b; });
-  return d;
-}
 function getStyleNames(){ return DATA.styles.map(s=>s.name); }
+
+function applyState(state){
+  DATA = {
+    siteName: state.site_name,
+    ownerName: state.owner_name,
+    styles: state.styles || [],
+    customers: state.role === 'owner' ? (state.customers || []) : [state.me],
+    appointments: state.appointments || [],
+    blocks: state.blocks || [],
+    dayStatus: state.dayStatus || []
+  };
+  document.title = DATA.siteName;
+}
+
+async function refreshState(){
+  const { data, error } = await sb.rpc('rpc_get_state', { p_token: session.token });
+  if(error || !data || data.error){ forceLogout(); return false; }
+  applyState(data);
+  return true;
+}
+
+function forceLogout(){
+  session = null;
+  localStorage.removeItem(SESSION_KEY);
+  document.getElementById('app').style.display='none';
+  document.getElementById('loginScreen').style.display='flex';
+}
 
 let toastTimer;
 function toast(msg){
@@ -295,26 +283,29 @@ function openModal(html){
 }
 function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
 
-document.getElementById('loginForm').addEventListener('submit', (e)=>{
+document.getElementById('loginForm').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const u = document.getElementById('loginUser').value.trim();
   const p = document.getElementById('loginPass').value;
   const errEl = document.getElementById('loginError');
   errEl.classList.add('hidden');
 
-  if(u === DATA.ownerAuth.username && p === DATA.ownerAuth.password){
-    session = { role:'owner' }; enterApp(); return;
+  const { data, error } = await sb.rpc('rpc_login', { p_username: u, p_password: p });
+  if(error || !data){
+    errEl.textContent = 'Verbindung fehlgeschlagen. Bitte versuche es erneut.';
+    errEl.classList.remove('hidden'); return;
   }
-  const cust = DATA.customers.find(c => c.username === u);
-  if(cust && cust.password === p){
-    if(cust.status === 'locked'){
-      errEl.textContent = 'Dieser Account wurde gesperrt. Bitte wende dich an den Owner.';
-      errEl.classList.remove('hidden'); return;
-    }
-    session = { role:'kunde', customerId:cust.id }; enterApp(); return;
+  if(data.error === 'locked'){
+    errEl.textContent = 'Dieser Account wurde gesperrt. Bitte wende dich an den Owner.';
+    errEl.classList.remove('hidden'); return;
   }
-  errEl.textContent = 'Benutzername oder Passwort ist falsch.';
-  errEl.classList.remove('hidden');
+  if(data.error){
+    errEl.textContent = 'Benutzername oder Passwort ist falsch.';
+    errEl.classList.remove('hidden'); return;
+  }
+  session = { token: data.token, role: data.role === 'owner' ? 'owner' : 'kunde', customerId: data.customer_id };
+  localStorage.setItem(SESSION_KEY, data.token);
+  if(await refreshState()) enterApp();
 });
 
 document.getElementById('forgotLink').addEventListener('click', (e)=>{
@@ -332,26 +323,19 @@ function forgotModal(){
   <div class="modal-actions"><button class="btn btn-gold" id="forgotSubmitBtn">Neues Passwort anfordern</button></div>`;
 }
 function wireForgotModal(){
-  document.getElementById('forgotSubmitBtn').addEventListener('click', ()=>{
-    const val = document.getElementById('forgotInput').value.trim().toLowerCase();
+  document.getElementById('forgotSubmitBtn').addEventListener('click', async ()=>{
+    const val = document.getElementById('forgotInput').value.trim();
     const errEl = document.getElementById('forgotError');
-    let target = null, isOwner = false;
-    if(val === DATA.ownerAuth.username.toLowerCase()){ target = DATA.ownerAuth; isOwner = true; }
-    else{
-      target = DATA.customers.find(c => c.username.toLowerCase()===val || (c.email||'').toLowerCase()===val);
-    }
-    if(!target){
+    const { data, error } = await sb.rpc('rpc_forgot_password', { p_identifier: val });
+    if(error || !data || data.error){
       errEl.textContent = 'Kein Account mit diesen Angaben gefunden.';
       errEl.classList.remove('hidden');
       return;
     }
-    const newPass = genPassword();
-    target.password = newPass;
-    saveData();
     openModal(`
       <h3>Neues Passwort generiert</h3>
-      <p class="modal-sub">Diese Website läuft ohne eigenen Server und kann daher keine echte E-Mail versenden. Zur Demonstration zeigen wir dir das neue Passwort direkt an:</p>
-      <div class="copy-box"><b>Benutzername:</b> ${isOwner?DATA.ownerAuth.username:target.username}<br><b>Neues Passwort:</b> ${newPass}</div>
+      <p class="modal-sub">Diese Website kann derzeit keine echte E-Mail versenden. Zur Demonstration zeigen wir dir das neue Passwort direkt an:</p>
+      <div class="copy-box"><b>Benutzername:</b> ${data.username}<br><b>Neues Passwort:</b> ${data.new_password}</div>
       <div class="modal-actions"><button class="btn btn-ghost" style="width:100%" id="closeModalBtn">Zum Login</button></div>`);
     document.getElementById('closeModalBtn').addEventListener('click', closeModal);
   });
@@ -364,9 +348,8 @@ function enterApp(){
   renderAll();
 }
 function logout(){
-  session = null;
-  document.getElementById('app').style.display='none';
-  document.getElementById('loginScreen').style.display='flex';
+  if(session) sb.rpc('rpc_logout', { p_token: session.token });
+  forceLogout();
   document.getElementById('loginForm').reset();
 }
 
@@ -390,12 +373,12 @@ function renderAll(){ renderSidebar(); renderBottomNav(); renderView(); }
 
 function renderSidebar(){
   const items = navConfig();
-  const who = session.role==='owner' ? DATA.ownerAuth.ownerName : DATA.customers.find(c=>c.id===session.customerId).name;
+  const who = session.role==='owner' ? DATA.ownerName : DATA.customers.find(c=>c.id===session.customerId).name;
   const sub = session.role==='owner' ? 'Owner' : 'Kunde';
   document.getElementById('sidebar').innerHTML = `
     <div class="sb-brand">
       <div class="brand-mark"><span>BF</span></div>
-      <div class="sb-brand-text"><b>${DATA.ownerAuth.siteName}</b><small>Geschlossener Zugang</small></div>
+      <div class="sb-brand-text"><b>${DATA.siteName}</b><small>Geschlossener Zugang</small></div>
     </div>
     <div class="nav-group">
       ${items.map(i=>`<button class="nav-item ${currentView===i.id?'active':''}" data-nav="${i.id}">${i.icon}<span>${i.label}</span></button>`).join('')}
@@ -435,6 +418,14 @@ function apptsForDate(dateStr){ return DATA.appointments.filter(a=>a.date===date
 function blocksForDate(dateStr){ return DATA.blocks.filter(b=>b.date===dateStr); }
 function isFullDayBlock(b){ return b.from==='09:00' && b.to==='19:00'; }
 function isPastDate(dateStr){ const d=parseDate(dateStr); const t=new Date(); t.setHours(0,0,0,0); return d<t; }
+function dayFlags(dateStr){
+  if(session.role==='owner'){
+    const appts = apptsForDate(dateStr).filter(a=>a.status!=='rejected');
+    return { hasConfirmed: appts.some(a=>a.status==='confirmed'), hasRequested: appts.some(a=>a.status==='requested') };
+  }
+  const ds = DATA.dayStatus.find(d=>d.date===dateStr);
+  return { hasConfirmed: !!(ds && ds.has_confirmed), hasRequested: !!(ds && ds.has_requested) };
+}
 
 function ownerDashboard(){
   const todayStr = fmtDate(new Date());
@@ -443,7 +434,7 @@ function ownerDashboard(){
   const activeCustomers = DATA.customers.filter(c=>c.status==='active').length;
 
   return `
-  <div class="page-head"><div><h2>Übersicht</h2><p>Willkommen zurück, ${DATA.ownerAuth.ownerName}.</p></div></div>
+  <div class="page-head"><div><h2>Übersicht</h2><p>Willkommen zurück, ${DATA.ownerName}.</p></div></div>
   <div class="grid grid-3" style="margin-bottom:18px;">
     <div class="card stat-card"><div class="stat-label">Heutige Termine</div><div class="stat-value">${todays.length}</div><div class="stat-sub">bestätigt für heute</div></div>
     <div class="card stat-card"><div class="stat-label">Neue Anfragen</div><div class="stat-value">${requests.length}</div><div class="stat-sub">warten auf Antwort</div></div>
@@ -472,7 +463,7 @@ function rowAppt(a){
 function emptyState(msg){ return `<div class="empty-state">${ICONS.empty}<div>${msg}</div></div>`; }
 
 function ownerSettingsView(){
-  const o = DATA.ownerAuth;
+  const o = { ownerName: DATA.ownerName, siteName: DATA.siteName };
   return `
   <div class="page-head"><div><h2>Einstellungen</h2><p>Profil, Zugang und Frisuren verwalten.</p></div></div>
   <div class="grid grid-2">
@@ -536,7 +527,7 @@ function customerDetailModal(c){
   return `
   <h3>${c.name}</h3>
   <p class="modal-sub">Zugangsdaten &amp; Verwaltung</p>
-  <div class="copy-box"><b>Benutzername:</b> ${c.username}<br><b>Passwort:</b> ${c.password}<br><b>E-Mail:</b> ${c.email||'—'}<br><b>Status:</b> ${c.status==='active'?'Aktiv':'Gesperrt'}</div>
+  <div class="copy-box"><b>Benutzername:</b> ${c.username}<br><b>E-Mail:</b> ${c.email||'—'}<br><b>Status:</b> ${c.status==='active'?'Aktiv':'Gesperrt'}</div>
   <div class="field"><label>Interne Notiz (nur für dich sichtbar)</label><textarea id="custNotes">${c.notes||''}</textarea></div>
   <div class="modal-actions">
     <button class="btn btn-outline-gold" id="saveNotesBtn">Notiz speichern</button>
@@ -553,7 +544,7 @@ function newCustomerModal(){
   <div class="modal-actions"><button class="btn btn-gold" id="createCustBtn">Kunde erstellen</button></div>`;
 }
 function inviteResultModal(c){
-  const msg = `Hey ${c.name}! Du wurdest zu ${DATA.ownerAuth.siteName} eingeladen.\nBenutzername: ${c.username}\nStartpasswort: ${c.password}\n(Bitte nach dem ersten Login dein eigenes Passwort setzen.)`;
+  const msg = `Hey ${c.name}! Du wurdest zu ${DATA.siteName} eingeladen.\nBenutzername: ${c.username}\nStartpasswort: ${c.password}\n(Bitte nach dem ersten Login dein eigenes Passwort setzen.)`;
   return `
   <h3>Kunde erstellt</h3>
   <p class="modal-sub">Sende diese Nachricht an ${c.name}.</p>
@@ -562,6 +553,13 @@ function inviteResultModal(c){
     <button class="btn btn-outline-gold" id="copyInviteBtn">Nachricht kopieren</button>
     <button class="btn btn-ghost" id="closeModalBtn">Fertig</button>
   </div>`;
+}
+function resetResultModal(c, newPassword){
+  return `
+  <h3>Neues Passwort generiert</h3>
+  <p class="modal-sub">${c.name} (${c.username})</p>
+  <div class="copy-box"><b>Neues Passwort:</b> ${newPassword}</div>
+  <div class="modal-actions"><button class="btn btn-ghost" style="width:100%" id="closeModalBtn">Fertig</button></div>`;
 }
 
 function kundeDashboard(){
@@ -627,12 +625,14 @@ function calendarView(isOwner){
     const dateStr = `${year}-${pad(month+1)}-${pad(d)}`;
     const blocks = blocksForDate(dateStr);
     const fullBlock = blocks.some(isFullDayBlock);
-    const appts = apptsForDate(dateStr).filter(a=>a.status!=='rejected');
+    const { hasConfirmed, hasRequested } = dayFlags(dateStr);
     let tint = '';
     if(fullBlock) tint='tint-black';
-    else if(appts.some(a=>a.status==='confirmed')) tint='tint-red';
-    else if(appts.some(a=>a.status==='requested')) tint='tint-yellow';
-    const dotColors = [...new Set(appts.map(a=>a.status==='confirmed'?'red':'yellow'))];
+    else if(hasConfirmed) tint='tint-red';
+    else if(hasRequested) tint='tint-yellow';
+    const dotColors = [];
+    if(hasConfirmed) dotColors.push('red');
+    if(hasRequested) dotColors.push('yellow');
     if(blocks.length && !fullBlock) dotColors.push('black');
     const past = isPastDate(dateStr);
     cells += `<button class="cal-day ${tint} ${dateStr===todayStr?'today':''} ${past?'past':''}" data-day="${dateStr}">
@@ -755,42 +755,46 @@ function requestApptModal(prefDate){
 
 function attachViewHandlers(){
   const profileOwnerForm = document.getElementById('profileOwnerForm');
-  if(profileOwnerForm) profileOwnerForm.addEventListener('submit', e=>{
+  if(profileOwnerForm) profileOwnerForm.addEventListener('submit', async e=>{
     e.preventDefault();
-    DATA.ownerAuth.ownerName = document.getElementById('ownerNameInput').value.trim()||DATA.ownerAuth.ownerName;
-    DATA.ownerAuth.siteName = document.getElementById('siteNameInput').value.trim()||DATA.ownerAuth.siteName;
-    saveData(); toast('Gespeichert'); renderAll();
+    const ownerName = document.getElementById('ownerNameInput').value.trim();
+    const siteName = document.getElementById('siteNameInput').value.trim();
+    await sb.rpc('rpc_update_owner_profile', { p_token: session.token, p_owner_name: ownerName, p_site_name: siteName });
+    await refreshState(); toast('Gespeichert'); renderAll();
   });
   const pwForm = document.getElementById('pwForm');
-  if(pwForm) pwForm.addEventListener('submit', e=>{
+  if(pwForm) pwForm.addEventListener('submit', async e=>{
     e.preventDefault();
     const cur = document.getElementById('pwCurrent').value, nw = document.getElementById('pwNew').value;
-    if(cur !== DATA.ownerAuth.password){ toast('Aktuelles Passwort stimmt nicht.'); return; }
-    DATA.ownerAuth.password = nw; saveData(); toast('Passwort aktualisiert'); pwForm.reset();
+    const { data } = await sb.rpc('rpc_change_owner_password', { p_token: session.token, p_current: cur, p_new: nw });
+    if(data && data.error){ toast('Aktuelles Passwort stimmt nicht.'); return; }
+    toast('Passwort aktualisiert'); pwForm.reset();
   });
   const addStyleBtn = document.getElementById('addStyleBtn');
-  if(addStyleBtn) addStyleBtn.addEventListener('click', ()=>{
+  if(addStyleBtn) addStyleBtn.addEventListener('click', async ()=>{
     const input = document.getElementById('newStyleName');
     const name = input.value.trim();
     if(!name){ toast('Bitte einen Namen eingeben.'); return; }
-    DATA.styles.push({id:uid('s'), name}); saveData(); toast('Frisur hinzugefügt'); renderAll();
+    await sb.rpc('rpc_add_style', { p_token: session.token, p_name: name });
+    await refreshState(); toast('Frisur hinzugefügt'); renderAll();
   });
-  document.querySelectorAll('[data-style-del]').forEach(b=>b.addEventListener('click', ()=>{
+  document.querySelectorAll('[data-style-del]').forEach(b=>b.addEventListener('click', async ()=>{
     if(DATA.styles.length<=1){ toast('Mindestens eine Frisur muss vorhanden sein.'); return; }
-    DATA.styles = DATA.styles.filter(s=>s.id!==b.dataset.styleDel); saveData(); toast('Frisur entfernt'); renderAll();
+    await sb.rpc('rpc_delete_style', { p_token: session.token, p_style_id: b.dataset.styleDel });
+    await refreshState(); toast('Frisur entfernt'); renderAll();
   }));
 
   const newBtn = document.getElementById('newCustBtn');
   if(newBtn) newBtn.addEventListener('click', ()=>{
     openModal(newCustomerModal());
-    document.getElementById('createCustBtn').addEventListener('click', ()=>{
+    document.getElementById('createCustBtn').addEventListener('click', async ()=>{
       const name = document.getElementById('newCustName').value.trim();
       if(!name){ toast('Bitte einen Namen eingeben.'); return; }
       const email = document.getElementById('newCustEmail').value.trim();
-      const username = name.toLowerCase().split(/\s+/)[0].replace(/[^a-z0-9]/g,'') + Math.floor(Math.random()*90+10);
-      const c = { id:uid('c'), name, email, username, password:genPassword(), status:'active', favoriteStyle:getStyleNames()[0]||'', notes:'', createdAt:fmtDate(new Date()) };
-      DATA.customers.push(c); saveData();
-      openModal(inviteResultModal(c));
+      const { data, error } = await sb.rpc('rpc_create_customer', { p_token: session.token, p_name: name, p_email: email });
+      if(error || !data){ toast('Kunde konnte nicht erstellt werden.'); return; }
+      await refreshState();
+      openModal(inviteResultModal({ name, username: data.username, password: data.password }));
       document.getElementById('closeModalBtn').addEventListener('click', ()=>{ closeModal(); renderAll(); });
       document.getElementById('copyInviteBtn').addEventListener('click', async ()=>{
         const text = document.getElementById('inviteMsg').innerText;
@@ -802,34 +806,46 @@ function attachViewHandlers(){
   document.querySelectorAll('[data-cust-view]').forEach(b=>b.addEventListener('click', ()=>{
     const c = custById(b.dataset.custView);
     openModal(customerDetailModal(c));
-    document.getElementById('saveNotesBtn').addEventListener('click', ()=>{ c.notes = document.getElementById('custNotes').value; saveData(); toast('Notiz gespeichert'); });
-    document.getElementById('resetPwBtn').addEventListener('click', ()=>{ c.password = genPassword(); saveData(); toast('Neues Passwort generiert'); openModal(customerDetailModal(c)); document.getElementById('closeModalBtn').addEventListener('click', closeModal); });
+    document.getElementById('saveNotesBtn').addEventListener('click', async ()=>{
+      const notes = document.getElementById('custNotes').value;
+      await sb.rpc('rpc_update_customer_notes', { p_token: session.token, p_customer_id: c.id, p_notes: notes });
+      await refreshState(); toast('Notiz gespeichert');
+    });
+    document.getElementById('resetPwBtn').addEventListener('click', async ()=>{
+      const { data } = await sb.rpc('rpc_reset_customer_password', { p_token: session.token, p_customer_id: c.id });
+      if(!data || !data.password){ toast('Zurücksetzen fehlgeschlagen'); return; }
+      openModal(resetResultModal(c, data.password));
+      document.getElementById('closeModalBtn').addEventListener('click', closeModal);
+    });
     document.getElementById('closeModalBtn').addEventListener('click', closeModal);
   }));
-  document.querySelectorAll('[data-cust-toggle]').forEach(b=>b.addEventListener('click', ()=>{
-    const c = custById(b.dataset.custToggle); c.status = c.status==='active'?'locked':'active'; saveData(); toast(c.status==='active'?'Kunde entsperrt':'Kunde gesperrt'); renderAll();
+  document.querySelectorAll('[data-cust-toggle]').forEach(b=>b.addEventListener('click', async ()=>{
+    const c = custById(b.dataset.custToggle);
+    await sb.rpc('rpc_toggle_customer_status', { p_token: session.token, p_customer_id: c.id });
+    await refreshState(); toast(c.status==='active'?'Kunde gesperrt':'Kunde entsperrt'); renderAll();
   }));
-  document.querySelectorAll('[data-cust-del]').forEach(b=>b.addEventListener('click', ()=>{
+  document.querySelectorAll('[data-cust-del]').forEach(b=>b.addEventListener('click', async ()=>{
     if(!confirm('Diesen Kunden wirklich löschen? Alle Termine bleiben zu Referenzzwecken erhalten.')) return;
-    DATA.customers = DATA.customers.filter(c=>c.id!==b.dataset.custDel); saveData(); toast('Kunde gelöscht'); renderAll();
+    await sb.rpc('rpc_delete_customer', { p_token: session.token, p_customer_id: b.dataset.custDel });
+    await refreshState(); toast('Kunde gelöscht'); renderAll();
   }));
 
   const profileForm = document.getElementById('profileForm');
-  if(profileForm) profileForm.addEventListener('submit', e=>{
+  if(profileForm) profileForm.addEventListener('submit', async e=>{
     e.preventDefault();
-    const c = custById(session.customerId);
-    c.name = document.getElementById('pName').value.trim()||c.name;
-    c.email = document.getElementById('pEmail').value.trim();
-    c.favoriteStyle = document.getElementById('pStyle').value;
-    saveData(); toast('Profil gespeichert'); renderAll();
+    const name = document.getElementById('pName').value.trim();
+    const email = document.getElementById('pEmail').value.trim();
+    const favoriteStyle = document.getElementById('pStyle').value;
+    await sb.rpc('rpc_update_customer_profile', { p_token: session.token, p_name: name, p_email: email, p_favorite_style: favoriteStyle });
+    await refreshState(); toast('Profil gespeichert'); renderAll();
   });
   const custPwForm = document.getElementById('custPwForm');
-  if(custPwForm) custPwForm.addEventListener('submit', e=>{
+  if(custPwForm) custPwForm.addEventListener('submit', async e=>{
     e.preventDefault();
-    const c = custById(session.customerId);
     const cur = document.getElementById('cpwCurrent').value, nw = document.getElementById('cpwNew').value;
-    if(cur !== c.password){ toast('Aktuelles Passwort stimmt nicht.'); return; }
-    c.password = nw; saveData(); toast('Passwort aktualisiert'); custPwForm.reset();
+    const { data } = await sb.rpc('rpc_change_customer_password', { p_token: session.token, p_current: cur, p_new: nw });
+    if(data && data.error){ toast('Aktuelles Passwort stimmt nicht.'); return; }
+    toast('Passwort aktualisiert'); custPwForm.reset();
   });
   const reqApptBtn = document.getElementById('reqApptBtn');
   if(reqApptBtn) reqApptBtn.addEventListener('click', ()=>{ openModal(requestApptModal(null)); wireRequestModal(); });
@@ -857,7 +873,7 @@ function wireRequestModal(){
     reader.onload = ()=>{ imageData = reader.result; const prev=document.getElementById('filePreview'); prev.src=imageData; prev.classList.remove('hidden'); dropZone.textContent='Bild ausgewählt'; };
     reader.readAsDataURL(f);
   });
-  document.getElementById('submitReqBtn').addEventListener('click', ()=>{
+  document.getElementById('submitReqBtn').addEventListener('click', async ()=>{
     if(!getStyleNames().length){ toast('Es sind noch keine Frisuren hinterlegt.'); return; }
     const date = document.getElementById('reqDate').value;
     const from = document.getElementById('reqFrom').value;
@@ -865,8 +881,9 @@ function wireRequestModal(){
     if(toMinutes(to) <= toMinutes(from)){ toast('"Bis" muss nach "Von" liegen.'); return; }
     const style = document.getElementById('reqStyle').value;
     const comment = document.getElementById('reqComment').value.trim();
-    const a = { id:uid('a'), customerId:session.customerId, date, requestedFrom:from, requestedTo:to, style, comment, image:imageData, status:'requested', start:null, duration:null, createdAt:fmtDate(new Date()) };
-    DATA.appointments.push(a); saveData(); closeModal(); toast('Anfrage gesendet');
+    const { error } = await sb.rpc('rpc_request_appointment', { p_token: session.token, p_date: date, p_from: from, p_to: to, p_style: style, p_comment: comment, p_image: imageData });
+    if(error){ toast('Anfrage fehlgeschlagen'); return; }
+    await refreshState(); closeModal(); toast('Anfrage gesendet');
     selectedDay = date; renderView();
   });
 }
@@ -880,35 +897,50 @@ function wireDayDetail(){
       if(fullChk.checked){ fromSel.value='09:00'; toSel.value='19:00'; fromSel.disabled=true; toSel.disabled=true; }
       else{ fromSel.disabled=false; toSel.disabled=false; }
     });
-    document.getElementById('saveBlockBtn').addEventListener('click', ()=>{
+    document.getElementById('saveBlockBtn').addEventListener('click', async ()=>{
       const from = fromSel.value, to = toSel.value;
       if(toMinutes(to) <= toMinutes(from)){ toast('"Bis" muss nach "Von" liegen.'); return; }
       const reason = document.getElementById('blockReason').value.trim();
-      DATA.blocks.push({ id:uid('b'), date:selectedDay, from, to, reason }); saveData(); closeModal(); toast('Zeit blockiert'); renderView();
+      await sb.rpc('rpc_block_time', { p_token: session.token, p_date: selectedDay, p_from: from, p_to: to, p_reason: reason });
+      await refreshState(); closeModal(); toast('Zeit blockiert'); renderView();
     });
   });
-  document.querySelectorAll('[data-unblock]').forEach(b=>b.addEventListener('click', ()=>{
-    DATA.blocks = DATA.blocks.filter(bl=>bl.id!==b.dataset.unblock); saveData(); toast('Freigegeben'); renderView();
+  document.querySelectorAll('[data-unblock]').forEach(b=>b.addEventListener('click', async ()=>{
+    await sb.rpc('rpc_unblock', { p_token: session.token, p_id: Number(b.dataset.unblock) });
+    await refreshState(); toast('Freigegeben'); renderView();
   }));
   document.querySelectorAll('[data-confirm]').forEach(b=>b.addEventListener('click', ()=>{
-    const a = DATA.appointments.find(x=>x.id===b.dataset.confirm);
+    const a = DATA.appointments.find(x=>String(x.id)===b.dataset.confirm);
     openModal(confirmApptModal(a));
-    document.getElementById('saveConfirmBtn').addEventListener('click', ()=>{
-      a.start = document.getElementById('confirmStart').value;
-      a.duration = parseInt(document.getElementById('confirmDuration').value,10) || 30;
-      a.status = 'confirmed';
-      saveData(); closeModal(); toast('Termin bestätigt'); renderView();
+    document.getElementById('saveConfirmBtn').addEventListener('click', async ()=>{
+      const start = document.getElementById('confirmStart').value;
+      const duration = parseInt(document.getElementById('confirmDuration').value,10) || 30;
+      await sb.rpc('rpc_confirm_appointment', { p_token: session.token, p_id: a.id, p_start: start, p_duration: duration });
+      await refreshState(); closeModal(); toast('Termin bestätigt'); renderView();
     });
   }));
-  document.querySelectorAll('[data-reject]').forEach(b=>b.addEventListener('click', ()=>{
-    const a = DATA.appointments.find(x=>x.id===b.dataset.reject); a.status='rejected'; saveData(); toast('Termin abgelehnt'); renderView();
+  document.querySelectorAll('[data-reject]').forEach(b=>b.addEventListener('click', async ()=>{
+    await sb.rpc('rpc_reject_appointment', { p_token: session.token, p_id: Number(b.dataset.reject) });
+    await refreshState(); toast('Termin abgelehnt'); renderView();
   }));
   const reqOnDay = document.getElementById('requestOnDayBtn');
   if(reqOnDay) reqOnDay.addEventListener('click', ()=>{ openModal(requestApptModal(selectedDay)); wireRequestModal(); });
 }
 
-DATA = loadData();
-document.title = DATA.ownerAuth.siteName;
+(async function boot(){
+  const savedToken = localStorage.getItem(SESSION_KEY);
+  if(savedToken){
+    const { data, error } = await sb.rpc('rpc_get_state', { p_token: savedToken });
+    if(!error && data && !data.error){
+      session = { token: savedToken, role: data.role === 'owner' ? 'owner' : 'kunde', customerId: data.customerId };
+      applyState(data);
+      enterApp();
+      return;
+    }
+    localStorage.removeItem(SESSION_KEY);
+  }
+  document.getElementById('loginScreen').style.display='flex';
+})();
 </script>
 </body>
 </html>
