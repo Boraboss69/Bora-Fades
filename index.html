@@ -245,11 +245,13 @@ function applyState(state){
   DATA = {
     siteName: state.site_name,
     ownerName: state.owner_name,
+    ownerEmail: state.owner_email || '',
     styles: state.styles || [],
     customers: state.role === 'owner' ? (state.customers || []) : [state.me],
     appointments: state.appointments || [],
     blocks: state.blocks || [],
-    dayStatus: state.dayStatus || []
+    dayStatus: state.dayStatus || [],
+    mustSetup: state.role === 'customer' && !!(state.me && state.me.mustSetup)
   };
   document.title = DATA.siteName;
 }
@@ -277,9 +279,12 @@ function toast(msg){
   toastTimer = setTimeout(()=>el.classList.remove('show'), 2800);
 }
 
-function openModal(html){
+function openModal(html, opts){
+  opts = opts || {};
   document.getElementById('modalRoot').innerHTML = `<div class="modal-overlay" id="modalOverlay"><div class="modal">${html}</div></div>`;
-  document.getElementById('modalOverlay').addEventListener('click', (e)=>{ if(e.target.id==='modalOverlay') closeModal(); });
+  if(!opts.blocking){
+    document.getElementById('modalOverlay').addEventListener('click', (e)=>{ if(e.target.id==='modalOverlay') closeModal(); });
+  }
 }
 function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
 
@@ -317,27 +322,71 @@ document.getElementById('forgotLink').addEventListener('click', (e)=>{
 function forgotModal(){
   return `
   <h3>Passwort zurücksetzen</h3>
-  <p class="modal-sub">Gib deinen Benutzernamen oder deine E-Mail-Adresse ein.</p>
+  <p class="modal-sub">Gib deinen Namen, Benutzernamen und deine hinterlegte E-Mail-Adresse ein. Du bekommst dann eine E-Mail mit einem Link zum Zurücksetzen.</p>
   <div id="forgotError" class="login-error hidden"></div>
-  <div class="field"><input id="forgotInput" placeholder="Benutzername oder E-Mail"></div>
-  <div class="modal-actions"><button class="btn btn-gold" id="forgotSubmitBtn">Neues Passwort anfordern</button></div>`;
+  <div class="field"><label>Name</label><input id="forgotName" placeholder="Vor- und Nachname"></div>
+  <div class="field"><label>Benutzername</label><input id="forgotUser" placeholder="Benutzername"></div>
+  <div class="field"><label>E-Mail</label><input id="forgotEmail" type="email" placeholder="E-Mail-Adresse"></div>
+  <div class="modal-actions"><button class="btn btn-gold" id="forgotSubmitBtn">E-Mail zum Zurücksetzen senden</button></div>`;
 }
 function wireForgotModal(){
   document.getElementById('forgotSubmitBtn').addEventListener('click', async ()=>{
-    const val = document.getElementById('forgotInput').value.trim();
+    const name = document.getElementById('forgotName').value.trim();
+    const username = document.getElementById('forgotUser').value.trim();
+    const email = document.getElementById('forgotEmail').value.trim();
     const errEl = document.getElementById('forgotError');
-    const { data, error } = await sb.rpc('rpc_forgot_password', { p_identifier: val });
-    if(error || !data || data.error){
-      errEl.textContent = 'Kein Account mit diesen Angaben gefunden.';
+    errEl.classList.add('hidden');
+    if(!name || !username || !email){
+      errEl.textContent = 'Bitte alle drei Felder ausfüllen.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    const { data, error } = await sb.functions.invoke('forgot-password', { body: { name, username, email } });
+    if(error || !data || data.error === 'not_found'){
+      errEl.textContent = 'Kein Account mit diesen Angaben gefunden. Bitte Name, Benutzername und E-Mail genau prüfen.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    if(data.error === 'email_not_configured'){
+      errEl.textContent = 'E-Mail-Versand ist noch nicht eingerichtet. Bitte wende dich an den Owner.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    if(data.error){
+      errEl.textContent = 'Der Versand ist fehlgeschlagen. Bitte versuche es später erneut.';
       errEl.classList.remove('hidden');
       return;
     }
     openModal(`
-      <h3>Neues Passwort generiert</h3>
-      <p class="modal-sub">Diese Website kann derzeit keine echte E-Mail versenden. Zur Demonstration zeigen wir dir das neue Passwort direkt an:</p>
-      <div class="copy-box"><b>Benutzername:</b> ${data.username}<br><b>Neues Passwort:</b> ${data.new_password}</div>
+      <h3>E-Mail verschickt</h3>
+      <p class="modal-sub">Wir haben dir eine E-Mail mit einem Link zum Zurücksetzen geschickt. Der Link ist 30 Minuten gültig.</p>
       <div class="modal-actions"><button class="btn btn-ghost" style="width:100%" id="closeModalBtn">Zum Login</button></div>`);
     document.getElementById('closeModalBtn').addEventListener('click', closeModal);
+  });
+}
+
+function showResetPasswordScreen(resetToken){
+  document.getElementById('loginScreen').innerHTML = `
+    <div class="login-card">
+      <div class="brand-mark"><span>BF</span></div>
+      <h1>Neues Passwort</h1>
+      <p class="login-sub">Vergib ein neues Passwort für deinen Account.</p>
+      <div id="resetError" class="login-error hidden"></div>
+      <div class="field"><label>Neues Passwort</label><input id="resetNewPw" type="password" minlength="4" required></div>
+      <button class="btn btn-gold" id="resetSubmitBtn">Passwort setzen</button>
+    </div>`;
+  document.getElementById('resetSubmitBtn').addEventListener('click', async ()=>{
+    const pw = document.getElementById('resetNewPw').value;
+    const errEl = document.getElementById('resetError');
+    if(!pw || pw.length < 4){ errEl.textContent = 'Mindestens 4 Zeichen.'; errEl.classList.remove('hidden'); return; }
+    const { data, error } = await sb.rpc('rpc_reset_password_with_token', { p_reset_token: resetToken, p_new_password: pw });
+    if(error || !data || data.error){
+      errEl.textContent = 'Der Link ist ungültig oder abgelaufen. Fordere einen neuen an.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    window.history.replaceState({}, '', window.location.pathname);
+    location.reload();
   });
 }
 
@@ -346,6 +395,37 @@ function enterApp(){
   document.getElementById('app').style.display='block';
   currentView = 'dashboard';
   renderAll();
+  if(DATA.mustSetup) openFirstLoginModal();
+}
+
+function openFirstLoginModal(){
+  const c = custById(session.customerId);
+  openModal(`
+    <h3>Willkommen bei ${DATA.siteName}!</h3>
+    <p class="modal-sub">Bevor es losgeht: Bestätige deinen Namen, hinterlege deine E-Mail-Adresse (für "Passwort vergessen") und vergib dein eigenes Passwort.</p>
+    <div id="setupError" class="login-error hidden"></div>
+    <div class="field"><label>Dein Name</label><input id="setupName" value="${escapeHtml(c.name)}" required></div>
+    <div class="field"><label>E-Mail</label><input id="setupEmail" type="email" value="${escapeHtml(c.email||'')}" required></div>
+    <div class="field"><label>Neues Passwort</label><input id="setupPw" type="password" minlength="4" required></div>
+    <div class="modal-actions"><button class="btn btn-gold" id="setupSubmitBtn">Los geht's</button></div>`,
+    { blocking: true }
+  );
+  document.getElementById('setupSubmitBtn').addEventListener('click', async ()=>{
+    const name = document.getElementById('setupName').value.trim();
+    const email = document.getElementById('setupEmail').value.trim();
+    const pw = document.getElementById('setupPw').value;
+    const errEl = document.getElementById('setupError');
+    if(!name || !email || !pw || pw.length < 4){
+      errEl.textContent = 'Bitte alle Felder ausfüllen (Passwort mind. 4 Zeichen).';
+      errEl.classList.remove('hidden'); return;
+    }
+    const { data, error } = await sb.rpc('rpc_complete_first_login', { p_token: session.token, p_name: name, p_email: email, p_new_password: pw });
+    if(error || !data || data.error){
+      errEl.textContent = 'Das hat nicht geklappt. Bitte versuche es erneut.';
+      errEl.classList.remove('hidden'); return;
+    }
+    await refreshState(); closeModal(); toast('Eingerichtet, viel Spaß!'); renderAll();
+  });
 }
 function logout(){
   if(session) sb.rpc('rpc_logout', { p_token: session.token });
@@ -463,7 +543,7 @@ function rowAppt(a){
 function emptyState(msg){ return `<div class="empty-state">${ICONS.empty}<div>${msg}</div></div>`; }
 
 function ownerSettingsView(){
-  const o = { ownerName: DATA.ownerName, siteName: DATA.siteName };
+  const o = { ownerName: DATA.ownerName, siteName: DATA.siteName, ownerEmail: DATA.ownerEmail };
   return `
   <div class="page-head"><div><h2>Einstellungen</h2><p>Profil, Zugang und Frisuren verwalten.</p></div></div>
   <div class="grid grid-2">
@@ -472,6 +552,7 @@ function ownerSettingsView(){
       <form id="profileOwnerForm">
         <div class="field"><label>Dein Name</label><input id="ownerNameInput" value="${o.ownerName}"></div>
         <div class="field"><label>Seitenname</label><input id="siteNameInput" value="${o.siteName}"></div>
+        <div class="field"><label>E-Mail (für "Passwort vergessen")</label><input id="ownerEmailInput" type="email" value="${o.ownerEmail||''}"></div>
         <button class="btn btn-outline-gold" type="submit">Speichern</button>
       </form>
     </div>
@@ -759,7 +840,8 @@ function attachViewHandlers(){
     e.preventDefault();
     const ownerName = document.getElementById('ownerNameInput').value.trim();
     const siteName = document.getElementById('siteNameInput').value.trim();
-    await sb.rpc('rpc_update_owner_profile', { p_token: session.token, p_owner_name: ownerName, p_site_name: siteName });
+    const ownerEmail = document.getElementById('ownerEmailInput').value.trim();
+    await sb.rpc('rpc_update_owner_profile', { p_token: session.token, p_owner_name: ownerName, p_site_name: siteName, p_owner_email: ownerEmail });
     await refreshState(); toast('Gespeichert'); renderAll();
   });
   const pwForm = document.getElementById('pwForm');
@@ -928,6 +1010,12 @@ function wireDayDetail(){
 }
 
 (async function boot(){
+  const resetToken = new URLSearchParams(window.location.search).get('reset');
+  if(resetToken){
+    document.getElementById('loginScreen').style.display='flex';
+    showResetPasswordScreen(resetToken);
+    return;
+  }
   const savedToken = localStorage.getItem(SESSION_KEY);
   if(savedToken){
     const { data, error } = await sb.rpc('rpc_get_state', { p_token: savedToken });
