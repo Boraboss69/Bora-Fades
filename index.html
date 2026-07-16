@@ -254,6 +254,8 @@ function applyState(state){
     siteName: state.site_name,
     ownerName: state.owner_name,
     ownerEmail: state.owner_email || '',
+    ownerUsername: state.owner_username || '',
+    ownerUsernameChangedAt: state.owner_username_changed_at || null,
     styles: state.styles || [],
     customers: state.role === 'owner' ? (state.customers || []) : [state.me],
     appointments: state.appointments || [],
@@ -262,6 +264,19 @@ function applyState(state){
     mustSetup: state.role === 'customer' && !!(state.me && state.me.mustSetup)
   };
   document.title = DATA.siteName;
+}
+
+function notifyEvent(type, appointmentId){
+  sb.functions.invoke('notify', { body: { token: session.token, appointment_id: appointmentId, type } }).catch(()=>{});
+}
+
+function usernameCooldownText(changedAt){
+  if(!changedAt) return null;
+  const availableAt = new Date(changedAt);
+  availableAt.setDate(availableAt.getDate() + 30);
+  const now = new Date();
+  if(availableAt <= now) return null;
+  return availableAt.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});
 }
 
 function withLock(btn, fn){
@@ -624,6 +639,7 @@ function emptyState(msg){ return `<div class="empty-state">${ICONS.empty}<div>${
 
 function ownerSettingsView(){
   const o = { ownerName: DATA.ownerName, siteName: DATA.siteName, ownerEmail: DATA.ownerEmail };
+  const cooldown = usernameCooldownText(DATA.ownerUsernameChangedAt);
   return `
   <div class="page-head"><div><h2>Einstellungen</h2><p>Profil, Zugang und Frisuren verwalten.</p></div></div>
   <div class="grid grid-2">
@@ -645,6 +661,14 @@ function ownerSettingsView(){
         <button class="btn btn-outline-gold" type="submit">Passwort aktualisieren</button>
       </form>
     </div>
+  </div>
+  <div class="card" style="margin-top:16px;">
+    <div class="section-title">Benutzername</div>
+    <p class="modal-sub" style="margin:0 0 14px;">${cooldown ? `Nächste Änderung möglich ab ${cooldown}.` : 'Kann einmal pro Monat geändert werden.'}</p>
+    <form id="ownerUsernameForm">
+      <div class="field"><label>Benutzername</label><input id="ownerUsernameInput" value="${DATA.ownerUsername||''}" ${cooldown?'disabled':''}></div>
+      <button class="btn btn-outline-gold" type="submit" ${cooldown?'disabled':''}>Benutzername ändern</button>
+    </form>
   </div>
   <div class="card" style="margin-top:16px;">
     <div class="section-title">Frisuren &amp; Stile</div>
@@ -706,7 +730,7 @@ function newCustomerModal(){
   <div class="modal-actions"><button class="btn btn-gold" id="createCustBtn">Kunde erstellen</button></div>`;
 }
 function inviteResultModal(c){
-  const msg = `Hey ${c.name}! Du wurdest zu ${DATA.siteName} eingeladen.\nLink: ${window.location.origin}${window.location.pathname}\nBenutzername: ${c.username}\nStartpasswort: ${c.password}\n\nBitte speichere dir diese Zugangsdaten. Beim ersten Login kannst du deinen Namen, deine E-Mail und dein eigenes Passwort festlegen.`;
+  const msg = `Hey ${c.name}! Du wurdest zu ${DATA.siteName} eingeladen.\nLink: ${window.location.origin}${window.location.pathname}\nBenutzername: ${c.username}\nStartpasswort: ${c.password}\n\nBitte speichere dir diese Zugangsdaten. Beim ersten Login kannst du deinen Namen, deine E-Mail und dein eigenes Passwort festlegen. Mitteilungen zu deinen Terminen (bestätigt, abgesagt, Alternativvorschlag) bekommst du danach automatisch per E-Mail.`;
   return `
   <h3>Kunde erstellt</h3>
   <p class="modal-sub">Sende diese Nachricht an ${c.name}.</p>
@@ -775,6 +799,14 @@ function kundeProfileView(){
         <button class="btn btn-outline-gold" type="submit">Passwort aktualisieren</button>
       </form>
     </div>
+  </div>
+  <div class="card" style="margin-top:16px;">
+    <div class="section-title">Benutzername</div>
+    <p class="modal-sub" style="margin:0 0 14px;">${(()=>{ const cd = usernameCooldownText(c.usernameChangedAt); return cd ? `Nächste Änderung möglich ab ${cd}.` : 'Kann einmal pro Monat geändert werden.'; })()}</p>
+    <form id="custUsernameForm">
+      <div class="field"><label>Benutzername</label><input id="custUsernameInput" value="${c.username||''}" ${usernameCooldownText(c.usernameChangedAt)?'disabled':''}></div>
+      <button class="btn btn-outline-gold" type="submit" ${usernameCooldownText(c.usernameChangedAt)?'disabled':''}>Benutzername ändern</button>
+    </form>
   </div>`;
 }
 
@@ -930,14 +962,17 @@ function rejectFlowModal(a, isConfirmed){
 function proposeAltModal(a){
   const dates = [];
   for(let i=0;i<28;i++){ const d=new Date(); d.setDate(d.getDate()+i); dates.push(fmtDate(d)); }
+  if(!dates.includes(a.date)) dates.unshift(a.date);
+  dates.sort();
   const times = timeOptions();
+  const defaultStart = a.requestedFrom || '10:00';
   return `
   <button class="modal-x" id="proposeAltCloseBtn">&times;</button>
   <h3>Alternativtermin vorschlagen</h3>
   <p class="modal-sub">${custById(a.customerId)?.name||'Kunde'} — ${a.style}</p>
-  <div class="field"><label>Datum</label><select id="altDate">${dates.map(d=>`<option value="${d}">${fmtDateHuman(d)}</option>`).join('')}</select></div>
+  <div class="field"><label>Datum</label><select id="altDate">${dates.map(d=>`<option value="${d}" ${d===a.date?'selected':''}>${fmtDateHuman(d)}</option>`).join('')}</select></div>
   <div class="field-row">
-    <div class="field"><label>Startzeit</label><select id="altStart">${times.map(t=>`<option ${t==='10:00'?'selected':''}>${t}</option>`).join('')}</select></div>
+    <div class="field"><label>Startzeit</label><select id="altStart">${times.map(t=>`<option ${t===defaultStart?'selected':''}>${t}</option>`).join('')}</select></div>
     <div class="field"><label>Dauer (Minuten)</label><input type="number" id="altDuration" min="5" step="5" value="60"></div>
   </div>
   <div class="modal-actions"><button class="btn btn-gold" id="sendAltBtn">Vorschlag senden</button></div>`;
@@ -987,6 +1022,16 @@ function attachViewHandlers(){
     const { data } = await sb.rpc('rpc_change_owner_password', { p_token: session.token, p_current: cur, p_new: nw });
     if(data && data.error){ toast('Aktuelles Passwort stimmt nicht.'); return; }
     toast('Passwort aktualisiert'); pwForm.reset();
+  });
+  const ownerUsernameForm = document.getElementById('ownerUsernameForm');
+  if(ownerUsernameForm) ownerUsernameForm.addEventListener('submit', async e=>{
+    e.preventDefault();
+    const newUsername = document.getElementById('ownerUsernameInput').value.trim();
+    const { data } = await sb.rpc('rpc_update_owner_username', { p_token: session.token, p_new_username: newUsername });
+    if(!data || data.error === 'taken'){ toast('Dieser Benutzername ist bereits vergeben.'); return; }
+    if(data.error === 'invalid_format'){ toast('Nur Buchstaben, Zahlen, "." und "_" erlaubt.'); return; }
+    if(data.error === 'cooldown'){ toast('Benutzername kann nur einmal im Monat geändert werden.'); return; }
+    await refreshState(); toast('Benutzername geändert'); renderView();
   });
   const addStyleBtn = document.getElementById('addStyleBtn');
   if(addStyleBtn) addStyleBtn.addEventListener('click', async ()=>{
@@ -1066,6 +1111,16 @@ function attachViewHandlers(){
     if(data && data.error){ toast('Aktuelles Passwort stimmt nicht.'); return; }
     toast('Passwort aktualisiert'); custPwForm.reset();
   });
+  const custUsernameForm = document.getElementById('custUsernameForm');
+  if(custUsernameForm) custUsernameForm.addEventListener('submit', async e=>{
+    e.preventDefault();
+    const newUsername = document.getElementById('custUsernameInput').value.trim();
+    const { data } = await sb.rpc('rpc_update_customer_username', { p_token: session.token, p_new_username: newUsername });
+    if(!data || data.error === 'taken'){ toast('Dieser Benutzername ist bereits vergeben.'); return; }
+    if(data.error === 'invalid_format'){ toast('Nur Buchstaben, Zahlen, "." und "_" erlaubt.'); return; }
+    if(data.error === 'cooldown'){ toast('Benutzername kann nur einmal im Monat geändert werden.'); return; }
+    await refreshState(); toast('Benutzername geändert'); renderView();
+  });
   const reqApptBtn = document.getElementById('reqApptBtn');
   if(reqApptBtn) reqApptBtn.addEventListener('click', ()=>{ openModal(requestApptModal(null)); wireRequestModal(); });
   const reqApptBtnCal = document.getElementById('reqApptBtnCal');
@@ -1110,8 +1165,9 @@ function wireRequestModal(){
       if(!style){ toast('Bitte deinen Frisurwunsch eingeben.'); return; }
     }
     const comment = document.getElementById('reqComment').value.trim();
-    const { error } = await sb.rpc('rpc_request_appointment', { p_token: session.token, p_date: date, p_from: from, p_to: to, p_style: style, p_comment: comment, p_image: imageData });
-    if(error){ toast('Anfrage fehlgeschlagen'); return; }
+    const { data, error } = await sb.rpc('rpc_request_appointment', { p_token: session.token, p_date: date, p_from: from, p_to: to, p_style: style, p_comment: comment, p_image: imageData });
+    if(error || !data || !data.ok){ toast('Anfrage fehlgeschlagen'); return; }
+    notifyEvent('new_request', data.id);
     await refreshState(); closeModal(); toast('Anfrage gesendet');
     selectedDay = date; renderView();
   }));
@@ -1145,6 +1201,7 @@ function wireDayDetail(){
       const start = document.getElementById('confirmStart').value;
       const duration = parseInt(document.getElementById('confirmDuration').value,10) || 60;
       await sb.rpc('rpc_confirm_appointment', { p_token: session.token, p_id: a.id, p_start: start, p_duration: duration });
+      notifyEvent('confirmed', a.id);
       await refreshState(); closeModal(); toast('Termin bestätigt'); renderView();
     }));
   }));
@@ -1154,6 +1211,7 @@ function wireDayDetail(){
     document.getElementById('rejectFlowCloseBtn').addEventListener('click', closeModal);
     document.getElementById('rejectNoAltBtn').addEventListener('click', (e)=>withLock(e.currentTarget, async ()=>{
       await sb.rpc('rpc_reject_appointment', { p_token: session.token, p_id: a.id });
+      notifyEvent('rejected', a.id);
       await refreshState(); closeModal(); toast('Termin abgelehnt'); renderView();
     }));
     document.getElementById('rejectAltBtn').addEventListener('click', ()=>{
@@ -1164,16 +1222,21 @@ function wireDayDetail(){
         const start = document.getElementById('altStart').value;
         const duration = parseInt(document.getElementById('altDuration').value,10) || 60;
         await sb.rpc('rpc_propose_alternative', { p_token: session.token, p_id: a.id, p_date: date, p_start: start, p_duration: duration });
+        notifyEvent('proposed', a.id);
         await refreshState(); closeModal(); toast('Alternativtermin vorgeschlagen'); renderView();
       }));
     });
   }));
   document.querySelectorAll('[data-reject]').forEach(b=>b.addEventListener('click', (e)=>withLock(e.currentTarget, async ()=>{
-    await sb.rpc('rpc_reject_appointment', { p_token: session.token, p_id: Number(b.dataset.reject) });
+    const id = Number(b.dataset.reject);
+    await sb.rpc('rpc_reject_appointment', { p_token: session.token, p_id: id });
+    notifyEvent('proposal_declined', id);
     await refreshState(); toast('Termin abgelehnt'); renderView();
   })));
   document.querySelectorAll('[data-accept-proposal]').forEach(b=>b.addEventListener('click', (e)=>withLock(e.currentTarget, async ()=>{
-    await sb.rpc('rpc_accept_proposal', { p_token: session.token, p_id: Number(b.dataset.acceptProposal) });
+    const id = Number(b.dataset.acceptProposal);
+    await sb.rpc('rpc_accept_proposal', { p_token: session.token, p_id: id });
+    notifyEvent('proposal_accepted', id);
     await refreshState(); toast('Termin bestätigt'); renderView();
   })));
   const reqOnDay = document.getElementById('requestOnDayBtn');
