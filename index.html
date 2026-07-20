@@ -717,6 +717,35 @@ function readFileAsDataURL(file){
   });
 }
 
+function loadImg(src){
+  return new Promise((resolve, reject)=>{
+    const i = new Image();
+    i.onload = ()=>resolve(i);
+    i.onerror = ()=>reject(new Error('load failed'));
+    i.src = src;
+  });
+}
+
+// Downscale a possibly-huge photo to a safe size, drawing in horizontal
+// strips so we never exceed iOS Safari's per-draw canvas pixel limit.
+async function downscaleDataUrl(src, maxDim){
+  const img = await loadImg(src);
+  const NW = img.naturalWidth, NH = img.naturalHeight;
+  if(!NW || !NH) throw new Error('no dimensions');
+  const scale = Math.min(1, maxDim/Math.max(NW, NH));
+  if(scale >= 1) return src; // already small enough
+  const outW = Math.max(1, Math.round(NW*scale)), outH = Math.max(1, Math.round(NH*scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = outW; canvas.height = outH;
+  const ctx = canvas.getContext('2d');
+  const tileH = 512; // source strip height keeps each draw well under the limit
+  for(let sy=0; sy<NH; sy+=tileH){
+    const sh = Math.min(tileH, NH-sy);
+    ctx.drawImage(img, 0, sy, NW, sh, 0, Math.round(sy*scale), outW, Math.round(sh*scale));
+  }
+  return canvas.toDataURL('image/jpeg', 0.9);
+}
+
 function pickGalleryImage(){
   const input = document.createElement('input');
   input.type = 'file'; input.accept = 'image/*';
@@ -727,10 +756,14 @@ function pickGalleryImage(){
   input.addEventListener('change', async ()=>{
     const f = input.files && input.files[0];
     if(!f){ cleanup(); return; }
+    toast('Bild wird geladen…');
     try {
-      const dataUrl = await readFileAsDataURL(f);
+      const rawUrl = await readFileAsDataURL(f);
       cleanup();
-      openCropModal(dataUrl);
+      let workingUrl;
+      try { workingUrl = await downscaleDataUrl(rawUrl, 1600); }
+      catch(e){ workingUrl = rawUrl; } // fall back to the original if downscale fails
+      openCropModal(workingUrl);
     } catch(e){
       cleanup();
       toast('Bild konnte nicht geladen werden. Versuche es mit einem anderen Foto.');
