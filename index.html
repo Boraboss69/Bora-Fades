@@ -132,10 +132,10 @@ a{color:inherit;}
 .cal-day .dots{display:flex;gap:3px;}
 .cal-count{position:absolute;top:4px;right:5px;font-size:9.5px;font-weight:800;color:var(--gold-bright);background:rgba(198,161,91,.16);border-radius:8px;padding:1px 5px;line-height:1.3;}
 
-.carousel{position:relative;width:100%;aspect-ratio:4/3;border-radius:var(--radius);overflow:hidden;margin-bottom:22px;border:1px solid var(--border);background:var(--surface);}
+.carousel{position:relative;width:100%;aspect-ratio:4/3;border-radius:var(--radius);overflow:hidden;margin-bottom:22px;border:1px solid var(--border);background:var(--bg-alt);}
 .carousel-track{display:flex;height:100%;transition:transform .45s ease;touch-action:pan-y;}
-.carousel-slide{min-width:100%;height:100%;flex-shrink:0;}
-.carousel-slide img{width:100%;height:100%;object-fit:cover;display:block;}
+.carousel-slide{min-width:100%;height:100%;flex-shrink:0;background:var(--bg-alt);}
+.carousel-slide img{width:100%;height:100%;object-fit:contain;display:block;}
 .carousel-arrow{position:absolute;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;border:none;background:rgba(13,12,10,.55);color:#fff;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px);z-index:2;}
 .carousel-arrow svg{width:20px;height:20px;}
 .carousel-arrow:hover{background:rgba(13,12,10,.8);}
@@ -762,8 +762,8 @@ function wireCropper(src){
 
   function clamp(){
     const dispW = NW*baseScale*z, dispH = NH*baseScale*z;
-    ox = Math.min(0, Math.max(VW - dispW, ox));
-    oy = Math.min(0, Math.max(VH - dispH, oy));
+    if(dispW <= VW) ox = (VW - dispW)/2; else ox = Math.min(0, Math.max(VW - dispW, ox));
+    if(dispH <= VH) oy = (VH - dispH)/2; else oy = Math.min(0, Math.max(VH - dispH, oy));
   }
   function apply(){
     img.style.width = (NW*baseScale*z)+'px';
@@ -775,7 +775,7 @@ function wireCropper(src){
     NW = img.naturalWidth; NH = img.naturalHeight;
     VW = viewport.clientWidth; VH = viewport.clientHeight;
     if(!NW || !NH || !VW || !VH){ toast('Dieses Bild kann nicht angezeigt werden.'); closeModal(); return; }
-    baseScale = Math.max(VW/NW, VH/NH);
+    baseScale = Math.min(VW/NW, VH/NH); // fit whole image in frame by default
     z = 1;
     ox = (VW - NW*baseScale)/2; oy = (VH - NH*baseScale)/2;
     zoom.value = '1';
@@ -814,7 +814,10 @@ function wireCropper(src){
     const canvas = document.createElement('canvas');
     canvas.width = outW; canvas.height = outH;
     try {
-      canvas.getContext('2d').drawImage(img, sx, sy, sW, sH, 0, 0, outW, outH);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#151310';
+      ctx.fillRect(0, 0, outW, outH);
+      ctx.drawImage(img, sx, sy, sW, sH, 0, 0, outW, outH);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
       const { data, error } = await sb.rpc('rpc_add_gallery_image', { p_token: session.token, p_image_data: dataUrl });
       if(error || !data || data.error){
