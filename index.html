@@ -149,6 +149,11 @@ a{color:inherit;}
 .carousel-empty:hover{border-color:var(--gold-dim);color:var(--text-muted);}
 .carousel-empty svg{width:32px;height:32px;}
 .carousel-addbtn{position:absolute;top:12px;left:12px;z-index:3;width:auto;}
+.crop-viewport{position:relative;width:100%;aspect-ratio:16/7;overflow:hidden;border-radius:12px;border:1px solid var(--border);background:#000;touch-action:none;cursor:grab;}
+.crop-viewport:active{cursor:grabbing;}
+.crop-viewport img{position:absolute;left:0;top:0;max-width:none;user-select:none;-webkit-user-drag:none;}
+.crop-hint{font-size:11.5px;color:var(--text-faint);text-align:center;margin:8px 0 0;}
+input[type=range]{accent-color:var(--gold);}
 .cal-day.tint-green{background:var(--green-bg);}
 .cal-day.tint-yellow{background:var(--yellow-bg);}
 .cal-day.tint-red{background:var(--red-bg);}
@@ -703,41 +708,11 @@ async function loadGallery(){
   if(!error && Array.isArray(data)) GALLERY = data;
 }
 
-function resizeImage(file, maxDim, quality){
-  return new Promise((resolve, reject)=>{
-    let settled = false;
-    const done = (fn,v)=>{ if(!settled){ settled = true; clearTimeout(timer); fn(v); } };
-    const timer = setTimeout(()=>done(reject, new Error('timeout')), 8000);
-    const reader = new FileReader();
-    reader.onload = ()=>{
-      const img = new Image();
-      img.onload = ()=>{
-        try {
-          let width = img.width, height = img.height;
-          if(!width || !height){ done(reject, new Error('no dimensions')); return; }
-          if(width > maxDim || height > maxDim){
-            if(width >= height){ height = Math.round(height*maxDim/width); width = maxDim; }
-            else { width = Math.round(width*maxDim/height); height = maxDim; }
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = width; canvas.height = height;
-          canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-          done(resolve, canvas.toDataURL('image/jpeg', quality));
-        } catch(err){ done(reject, err); }
-      };
-      img.onerror = ()=>done(reject, new Error('decode failed'));
-      img.src = reader.result;
-    };
-    reader.onerror = ()=>done(reject, new Error('read failed'));
-    reader.readAsDataURL(file);
-  });
-}
-
 function readFileAsDataURL(file){
   return new Promise((resolve, reject)=>{
     const r = new FileReader();
     r.onload = ()=>resolve(r.result);
-    r.onerror = reject;
+    r.onerror = ()=>reject(new Error('read failed'));
     r.readAsDataURL(file);
   });
 }
@@ -752,31 +727,106 @@ function pickGalleryImage(){
   input.addEventListener('change', async ()=>{
     const f = input.files && input.files[0];
     if(!f){ cleanup(); return; }
-    toast('Bild wird verarbeitet…');
     try {
-      let dataUrl;
-      try {
-        // preferred: downscale + convert to JPEG (also converts iPhone HEIC via Safari)
-        dataUrl = await resizeImage(f, 1400, 0.82);
-      } catch(resizeErr){
-        // fallback: upload the original if it's not too large
-        if(f.size <= 5*1024*1024){ dataUrl = await readFileAsDataURL(f); }
-        else { throw resizeErr; }
-      }
+      const dataUrl = await readFileAsDataURL(f);
+      cleanup();
+      openCropModal(dataUrl);
+    } catch(e){
+      cleanup();
+      toast('Bild konnte nicht geladen werden. Versuche es mit einem anderen Foto.');
+    }
+  });
+  input.click();
+}
+
+function openCropModal(src){
+  openModal(`
+    <h3>Bild zuschneiden</h3>
+    <p class="modal-sub">Ziehe das Bild in Position und stelle den Zoom ein. Alles im Rahmen wird angezeigt.</p>
+    <div class="crop-viewport" id="cropViewport"><img id="cropImg" alt=""></div>
+    <p class="crop-hint">Zum Verschieben ziehen · Zoom mit dem Regler</p>
+    <div class="field" style="margin-top:12px;"><label>Zoom</label><input type="range" id="cropZoom" min="1" max="4" step="0.01" value="1"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="cropCancelBtn">Abbrechen</button>
+      <button class="btn btn-gold" id="cropDoneBtn">Fertig</button>
+    </div>`);
+  wireCropper(src);
+}
+
+function wireCropper(src){
+  const viewport = document.getElementById('cropViewport');
+  const img = document.getElementById('cropImg');
+  const zoom = document.getElementById('cropZoom');
+  let VW=0, VH=0, NW=0, NH=0, baseScale=1, ox=0, oy=0, z=1, ready=false;
+  let dragging=false, startX=0, startY=0, startOx=0, startOy=0;
+
+  function clamp(){
+    const dispW = NW*baseScale*z, dispH = NH*baseScale*z;
+    ox = Math.min(0, Math.max(VW - dispW, ox));
+    oy = Math.min(0, Math.max(VH - dispH, oy));
+  }
+  function apply(){
+    img.style.width = (NW*baseScale*z)+'px';
+    img.style.height = (NH*baseScale*z)+'px';
+    img.style.left = ox+'px';
+    img.style.top = oy+'px';
+  }
+  img.onload = ()=>{
+    NW = img.naturalWidth; NH = img.naturalHeight;
+    VW = viewport.clientWidth; VH = viewport.clientHeight;
+    if(!NW || !NH || !VW || !VH){ toast('Dieses Bild kann nicht angezeigt werden.'); closeModal(); return; }
+    baseScale = Math.max(VW/NW, VH/NH);
+    z = 1;
+    ox = (VW - NW*baseScale)/2; oy = (VH - NH*baseScale)/2;
+    zoom.value = '1';
+    ready = true;
+    apply();
+  };
+  img.onerror = ()=>{ toast('Dieses Bildformat kann nicht angezeigt werden. Versuche ein anderes Foto.'); closeModal(); };
+  img.src = src;
+
+  zoom.addEventListener('input', ()=>{
+    if(!ready) return;
+    const cx = VW/2 - ox, cy = VH/2 - oy;
+    const newZ = parseFloat(zoom.value);
+    const ratio = newZ/z;
+    ox = VW/2 - cx*ratio; oy = VH/2 - cy*ratio;
+    z = newZ;
+    clamp(); apply();
+  });
+
+  function pt(e){ const t = e.touches ? e.touches[0] : e; return { x:t.clientX, y:t.clientY }; }
+  function onDown(e){ if(!ready) return; dragging=true; const p=pt(e); startX=p.x; startY=p.y; startOx=ox; startOy=oy;
+    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp); }
+  function onMove(e){ if(!dragging) return; const p=pt(e); ox=startOx+(p.x-startX); oy=startOy+(p.y-startY); clamp(); apply(); if(e.cancelable) e.preventDefault(); }
+  function onUp(){ dragging=false; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); }
+  viewport.addEventListener('mousedown', onDown);
+  viewport.addEventListener('touchstart', onDown, {passive:true});
+  viewport.addEventListener('touchmove', onMove, {passive:false});
+  viewport.addEventListener('touchend', onUp);
+
+  document.getElementById('cropCancelBtn').addEventListener('click', closeModal);
+  document.getElementById('cropDoneBtn').addEventListener('click', (e)=>withLock(e.currentTarget, async ()=>{
+    if(!ready){ toast('Bitte warte, bis das Bild geladen ist.'); return; }
+    const scale = baseScale*z;
+    const sx = -ox/scale, sy = -oy/scale, sW = VW/scale, sH = VH/scale;
+    const outW = 1400, outH = Math.round(1400*VH/VW);
+    const canvas = document.createElement('canvas');
+    canvas.width = outW; canvas.height = outH;
+    try {
+      canvas.getContext('2d').drawImage(img, sx, sy, sW, sH, 0, 0, outW, outH);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
       const { data, error } = await sb.rpc('rpc_add_gallery_image', { p_token: session.token, p_image_data: dataUrl });
       if(error || !data || data.error){
         toast(data && data.error==='limit_reached' ? 'Maximal 20 Bilder möglich.' : 'Hinzufügen fehlgeschlagen.');
         return;
       }
-      await loadGallery(); carouselIndex = GALLERY.length-1; renderView();
+      await loadGallery(); carouselIndex = GALLERY.length-1; closeModal(); renderView();
       toast('Bild hinzugefügt');
-    } catch(e){
-      toast('Bild konnte nicht verarbeitet werden. Versuche es mit einem anderen Foto.');
-    } finally {
-      cleanup();
+    } catch(err){
+      toast('Bild konnte nicht verarbeitet werden. Versuche ein anderes Foto.');
     }
-  });
-  input.click();
+  }));
 }
 
 function wireCarousel(){
