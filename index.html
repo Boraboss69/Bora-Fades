@@ -809,6 +809,7 @@ function wireCropper(src){
   document.getElementById('cropDoneBtn').addEventListener('click', (e)=>withLock(e.currentTarget, async ()=>{
     if(!ready){ toast('Bitte warte, bis das Bild geladen ist.'); return; }
     const scale = baseScale*z;
+    // desired source region in image coordinates (may extend past the image edges)
     const sx = -ox/scale, sy = -oy/scale, sW = VW/scale, sH = VH/scale;
     const outW = 1400, outH = Math.round(1400*VH/VW);
     const canvas = document.createElement('canvas');
@@ -817,7 +818,15 @@ function wireCropper(src){
       const ctx = canvas.getContext('2d');
       ctx.fillStyle = '#151310';
       ctx.fillRect(0, 0, outW, outH);
-      ctx.drawImage(img, sx, sy, sW, sH, 0, 0, outW, outH);
+      // clip the source rect to the real image bounds and map it to the matching
+      // destination area — iOS Safari renders nothing if the source rect overflows
+      const cL = Math.max(0, sx), cT = Math.max(0, sy);
+      const cR = Math.min(NW, sx+sW), cB = Math.min(NH, sy+sH);
+      if(cR > cL && cB > cT){
+        const dx = (cL - sx)/sW*outW, dy = (cT - sy)/sH*outH;
+        const dW = (cR - cL)/sW*outW, dH = (cB - cT)/sH*outH;
+        ctx.drawImage(img, cL, cT, cR-cL, cB-cT, dx, dy, dW, dH);
+      }
       const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
       const { data, error } = await sb.rpc('rpc_add_gallery_image', { p_token: session.token, p_image_data: dataUrl });
       if(error || !data || data.error){
