@@ -915,7 +915,7 @@ function wireCropper(src){
   viewport.addEventListener('touchmove', onMove, {passive:false});
   viewport.addEventListener('touchend', onUp);
 
-  function renderCrop(outW){
+  async function renderCrop(outW, freshSrc){
     const outH = Math.round(outW*VH/VW);
     const scale = baseScale*z;
     // desired source region in image coordinates (may extend past the image edges)
@@ -934,15 +934,21 @@ function wireCropper(src){
       const dx = (cL - sx)/sW*outW, dy = (cT - sy)/sH*outH;
       const dW = (cR - cL)/sW*outW, dH = (cB - cT)/sH*outH;
       photoRect = { dx, dy, dW, dH };
-      // draw in horizontal strips of the destination — the single-shot version
-      // of this draw is where iOS Safari has been seen to silently corrupt
-      // large photos into a partially black image
+      // Draw from a freshly-decoded, off-screen image rather than the live
+      // <img id="cropImg"> element — that element is actively displayed on
+      // screen, often scaled up well beyond its natural size while zoomed,
+      // and iOS Safari has been seen to use a degraded/partial on-screen
+      // raster as the drawImage source in that situation, baking a black
+      // patch into the saved photo. A plain off-screen Image object always
+      // draws from a clean full-resolution decode.
+      // Also draw in horizontal strips as extra insurance against any
+      // single-call size limit.
       const stepH = 200;
       for(let y=0; y<dH; y+=stepH){
         const h = Math.min(stepH, dH-y);
         const srcY = cT + (y/dH)*(cB-cT);
         const srcH = (h/dH)*(cB-cT);
-        ctx.drawImage(img, cL, srcY, cR-cL, srcH, dx, dy+y, dW, h);
+        ctx.drawImage(freshSrc, cL, srcY, cR-cL, srcH, dx, dy+y, dW, h);
       }
     }
     return { canvas, outW, outH, photoRect };
@@ -956,16 +962,22 @@ function wireCropper(src){
     const margin = 2;
     const rx = photoRect.dx+margin, ry = photoRect.dy+margin;
     const rw = Math.max(1, photoRect.dW-margin*2), rh = Math.max(1, photoRect.dH-margin*2);
-    return !hasContiguousBlankBand(ctx, outW, outH, rx, ry, rw, rh, 0x15,0x13,0x10);
+    // a failed draw can leave either our own fill color or plain black
+    // (e.g. if the underlying GPU surface got reset), so check for both
+    return !hasContiguousBlankBand(ctx, outW, outH, rx, ry, rw, rh, 0x15,0x13,0x10)
+        && !hasContiguousBlankBand(ctx, outW, outH, rx, ry, rw, rh, 0,0,0);
   }
 
   document.getElementById('cropCancelBtn').addEventListener('click', closeModal);
   document.getElementById('cropDoneBtn').addEventListener('click', (e)=>withLock(e.currentTarget, async ()=>{
     if(!ready){ toast('Bitte warte, bis das Bild geladen ist.'); return; }
+    let freshSrc;
+    try { freshSrc = (typeof createImageBitmap === 'function') ? await createImageBitmap(await (await fetch(src)).blob()) : await loadImg(src); }
+    catch(e){ try { freshSrc = await loadImg(src); } catch(e2){ toast('Bild konnte nicht verarbeitet werden. Versuche ein anderes Foto.'); return; } }
     const attempts = [1400, 1000, 700];
     for(let i=0; i<attempts.length; i++){
       try {
-        const { canvas, outW, outH, photoRect } = renderCrop(attempts[i]);
+        const { canvas, outW, outH, photoRect } = await renderCrop(attempts[i], freshSrc);
         if(!verifyCrop(canvas, outW, outH, photoRect)) continue;
         const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
         const { data, error } = await sb.rpc('rpc_add_gallery_image', { p_token: session.token, p_image_data: dataUrl });
