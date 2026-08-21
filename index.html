@@ -132,9 +132,9 @@ a{color:inherit;}
 .cal-day .dots{display:flex;gap:3px;}
 .cal-count{position:absolute;top:4px;right:5px;font-size:9.5px;font-weight:800;color:var(--gold-bright);background:rgba(198,161,91,.16);border-radius:8px;padding:1px 5px;line-height:1.3;}
 
-.carousel{position:relative;width:100%;aspect-ratio:4/3;border-radius:var(--radius);overflow:hidden;margin-bottom:22px;border:1px solid var(--border);background:var(--bg-alt);}
-.carousel-track{display:flex;height:100%;transition:transform .45s ease;touch-action:pan-y;}
-.carousel-slide{min-width:100%;height:100%;flex-shrink:0;background:var(--bg-alt);-webkit-transform:translateZ(0);transform:translateZ(0);-webkit-backface-visibility:hidden;backface-visibility:hidden;}
+.carousel{position:relative;width:100%;height:0;padding-bottom:75%;border-radius:var(--radius);overflow:hidden;margin-bottom:22px;border:1px solid var(--border);background:var(--bg-alt);}
+.carousel-track{position:absolute;top:0;left:0;height:100%;display:flex;transition:transform .45s ease;touch-action:pan-y;}
+.carousel-slide{height:100%;flex:none;background:var(--bg-alt);-webkit-transform:translateZ(0);transform:translateZ(0);-webkit-backface-visibility:hidden;backface-visibility:hidden;}
 .carousel-slide canvas{width:100%;height:100%;object-fit:contain;display:block;-webkit-transform:translateZ(0);transform:translateZ(0);-webkit-backface-visibility:hidden;backface-visibility:hidden;}
 .carousel-arrow{position:absolute;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;border:none;background:rgba(13,12,10,.55);color:#fff;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px);z-index:2;}
 .carousel-arrow svg{width:20px;height:20px;}
@@ -145,11 +145,12 @@ a{color:inherit;}
 .carousel-dots span.active{background:var(--gold-bright);}
 .carousel-del{position:absolute;top:12px;right:12px;width:34px;height:34px;border-radius:9px;border:none;background:rgba(181,87,61,.85);color:#fff;display:flex;align-items:center;justify-content:center;z-index:3;font-size:18px;line-height:1;}
 .carousel-del:hover{background:rgba(181,87,61,1);}
-.carousel-empty{width:100%;aspect-ratio:4/3;border-radius:var(--radius);border:1.5px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--text-faint);margin-bottom:22px;cursor:pointer;}
+.carousel-empty{position:relative;width:100%;height:0;padding-bottom:75%;border-radius:var(--radius);border:1.5px dashed var(--border);color:var(--text-faint);margin-bottom:22px;cursor:pointer;}
+.carousel-empty-inner{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;}
 .carousel-empty:hover{border-color:var(--gold-dim);color:var(--text-muted);}
 .carousel-empty svg{width:32px;height:32px;}
 .carousel-addbtn{position:absolute;top:12px;left:12px;z-index:3;width:auto;}
-.crop-viewport{position:relative;width:100%;aspect-ratio:4/3;overflow:hidden;border-radius:12px;border:1px solid var(--border);background:#000;touch-action:none;cursor:grab;}
+.crop-viewport{position:relative;width:100%;height:0;padding-bottom:75%;overflow:hidden;border-radius:12px;border:1px solid var(--border);background:#000;touch-action:none;cursor:grab;}
 .crop-viewport:active{cursor:grabbing;}
 .crop-viewport img{position:absolute;left:0;top:0;max-width:none;user-select:none;-webkit-user-drag:none;}
 .crop-hint{font-size:11.5px;color:var(--text-faint);text-align:center;margin:8px 0 0;}
@@ -683,10 +684,16 @@ function galleryCarousel(){
   const isOwner = session.role === 'owner';
   if(!GALLERY.length){
     if(!isOwner) return '';
-    return `<div class="carousel-empty" id="galleryAddEmpty">${ICONS.image}<div>Bilder hinzufügen</div></div>`;
+    return `<div class="carousel-empty" id="galleryAddEmpty"><div class="carousel-empty-inner">${ICONS.image}<div>Bilder hinzufügen</div></div></div>`;
   }
   if(carouselIndex >= GALLERY.length) carouselIndex = 0;
-  const slides = GALLERY.map((g,i)=>`<div class="carousel-slide"><canvas data-slide-canvas="${i}"></canvas></div>`).join('');
+  // widths are computed and set explicitly in percent rather than relying on
+  // flex "min-width:100%" auto-sizing, which has been unreliable in this
+  // carousel on some iPhones (each slide ending up sized to only part of
+  // the container, showing the plain background as if the photo were
+  // "cut in half")
+  const slidePct = 100/GALLERY.length;
+  const slides = GALLERY.map((g,i)=>`<div class="carousel-slide" style="width:${slidePct}%"><canvas data-slide-canvas="${i}"></canvas></div>`).join('');
   const dots = GALLERY.map((g,i)=>`<span class="${i===carouselIndex?'active':''}" data-carousel-dot="${i}"></span>`).join('');
   const arrows = GALLERY.length>1 ? `
     <button class="carousel-arrow left" data-carousel-prev>${ICONS.chevL}</button>
@@ -695,7 +702,7 @@ function galleryCarousel(){
     <button class="carousel-del" data-carousel-del="${GALLERY[carouselIndex].id}" title="Dieses Bild löschen">&times;</button>
     <button class="btn btn-gold btn-sm carousel-addbtn" id="galleryAddBtn">${ICONS.plus} Bild</button>` : '';
   return `<div class="carousel" id="galleryCarousel">
-    <div class="carousel-track" id="carouselTrack" style="transform:translateX(-${carouselIndex*100}%)">${slides}</div>
+    <div class="carousel-track" id="carouselTrack" style="width:${GALLERY.length*100}%;transform:translateX(-${carouselIndex*slidePct}%)">${slides}</div>
     ${arrows}
     ${GALLERY.length>1?`<div class="carousel-dots">${dots}</div>`:''}
     ${ownerControls}
@@ -1039,7 +1046,7 @@ function wireCarousel(){
   const del = carousel.querySelector('[data-carousel-del]');
   function go(i){
     carouselIndex = (i + GALLERY.length) % GALLERY.length;
-    track.style.transform = `translateX(-${carouselIndex*100}%)`;
+    track.style.transform = `translateX(-${carouselIndex*(100/GALLERY.length)}%)`;
     carousel.querySelectorAll('[data-carousel-dot]').forEach((d,idx)=>d.classList.toggle('active', idx===carouselIndex));
     if(del) del.dataset.carouselDel = GALLERY[carouselIndex].id;
   }
