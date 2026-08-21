@@ -738,7 +738,7 @@ async function downscaleDataUrl(src, maxDim){
   const canvas = document.createElement('canvas');
   canvas.width = outW; canvas.height = outH;
   const ctx = canvas.getContext('2d');
-  const tileH = 512; // source strip height keeps each draw well under the limit
+  const tileH = 256; // source strip height keeps each draw well under the limit
   for(let sy=0; sy<NH; sy+=tileH){
     const sh = Math.min(tileH, NH-sy);
     ctx.drawImage(img, 0, sy, NW, sh, 0, Math.round(sy*scale), outW, Math.round(sh*scale));
@@ -746,7 +746,82 @@ async function downscaleDataUrl(src, maxDim){
   return canvas.toDataURL('image/jpeg', 0.9);
 }
 
-function pickGalleryImage(){
+// Decode straight from the picked File using createImageBitmap when
+// available — this avoids routing a possibly-huge photo through an <img>
+// + base64 data URL first, which is where iOS Safari has been observed to
+// silently produce a corrupted (partially black) raster for large iPhone
+// camera photos. Falls back to the <img>-based tiled downscale otherwise.
+async function decodeFileToDataUrl(file, maxDim){
+  if(typeof createImageBitmap === 'function'){
+    let bmp;
+    try { bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+    catch(e1){ try { bmp = await createImageBitmap(file); } catch(e2){ bmp = null; } }
+    if(bmp && bmp.width && bmp.height){
+      const scale = Math.min(1, maxDim/Math.max(bmp.width, bmp.height));
+      const outW = Math.max(1, Math.round(bmp.width*scale)), outH = Math.max(1, Math.round(bmp.height*scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = outW; canvas.height = outH;
+      const ctx = canvas.getContext('2d');
+      const tileH = 256;
+      for(let sy=0; sy<bmp.height; sy+=tileH){
+        const sh = Math.min(tileH, bmp.height-sy);
+        ctx.drawImage(bmp, 0, sy, bmp.width, sh, 0, Math.round(sy*scale), outW, Math.round(sh*scale));
+      }
+      if(bmp.close) bmp.close();
+      return canvas.toDataURL('image/jpeg', 0.9);
+    }
+  }
+  const rawUrl = await readFileAsDataURL(file);
+  return await downscaleDataUrl(rawUrl, maxDim);
+}
+
+// Decode a data URL back into pixels and check for the tell-tale sign of a
+// partially-failed draw on iOS Safari: a solid block of near-black pixels
+// covering a big chunk of the image (a fully successful photo essentially
+// never has a large *contiguous, grid-wide* run of pure black). Samples a
+// dense grid across the whole picture and flags a big share of near-black
+// samples that stack up as a contiguous row/column (matching the "half the
+// picture is a solid black slab" failure mode) rather than scattered dark
+// pixels a real dark photo can legitimately contain.
+async function verifyImageDataUrl(dataUrl, expectW, expectH){
+  const img = await loadImg(dataUrl);
+  if(!img.naturalWidth || !img.naturalHeight) return false;
+  if(Math.abs(img.naturalWidth-expectW) > 2 || Math.abs(img.naturalHeight-expectH) > 2) return false;
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  return !hasContiguousBlankBand(ctx, img.naturalWidth, img.naturalHeight, 0, 0, img.naturalWidth, img.naturalHeight, 0,0,0);
+}
+
+// Samples a dense grid inside [rx,ry,rw,rh] and returns true if an entire
+// row or column of the grid is uniformly close to [tr,tg,tb] — the pattern
+// left by a drawImage call that silently painted nothing for part of the
+// canvas, leaving the canvas's pre-fill color (or default black) showing.
+function hasContiguousBlankBand(ctx, imgW, imgH, rx, ry, rw, rh, tr, tg, tb){
+  const cols = 10, rows = 10;
+  const isBlank = [];
+  for(let r=0; r<rows; r++){
+    const row = [];
+    for(let c=0; c<cols; c++){
+      const x = Math.min(imgW-1, Math.max(0, Math.round(rx + (c+0.5)/cols*rw)));
+      const y = Math.min(imgH-1, Math.max(0, Math.round(ry + (r+0.5)/rows*rh)));
+      const px = ctx.getImageData(x, y, 1, 1).data;
+      const dist = Math.abs(px[0]-tr) + Math.abs(px[1]-tg) + Math.abs(px[2]-tb);
+      row.push(dist < 18); // near-exact match to the target flat color
+    }
+    isBlank.push(row);
+  }
+  const rowAllBlank = r => isBlank[r].every(Boolean);
+  const colAllBlank = c => isBlank.every(row => row[c]);
+  let consecRows = 0;
+  for(let r=0; r<rows; r++){ consecRows = rowAllBlank(r) ? consecRows+1 : 0; if(consecRows>=3) return true; }
+  let consecCols = 0;
+  for(let c=0; c<cols; c++){ consecCols = colAllBlank(c) ? consecCols+1 : 0; if(consecCols>=3) return true; }
+  return false;
+}
+
+async function pickGalleryImage(){
   const input = document.createElement('input');
   input.type = 'file'; input.accept = 'image/*';
   // iOS Safari fires "change" reliably only when the input is in the DOM
@@ -756,18 +831,20 @@ function pickGalleryImage(){
   input.addEventListener('change', async ()=>{
     const f = input.files && input.files[0];
     if(!f){ cleanup(); return; }
+    cleanup();
     toast('Bild wird geladen…');
-    try {
-      const rawUrl = await readFileAsDataURL(f);
-      cleanup();
-      let workingUrl;
-      try { workingUrl = await downscaleDataUrl(rawUrl, 1600); }
-      catch(e){ workingUrl = rawUrl; } // fall back to the original if downscale fails
-      openCropModal(workingUrl);
-    } catch(e){
-      cleanup();
-      toast('Bild konnte nicht geladen werden. Versuche es mit einem anderen Foto.');
+    const attempts = [1200, 800, 500];
+    for(let i=0; i<attempts.length; i++){
+      try {
+        const dataUrl = await decodeFileToDataUrl(f, attempts[i]);
+        const dims = await new Promise(res=>{ const im=new Image(); im.onload=()=>res({w:im.naturalWidth,h:im.naturalHeight}); im.onerror=()=>res(null); im.src=dataUrl; });
+        if(dims && await verifyImageDataUrl(dataUrl, dims.w, dims.h)){
+          openCropModal(dataUrl);
+          return;
+        }
+      } catch(e){ /* try next, smaller size */ }
     }
+    toast('Dieses Foto konnte nicht verarbeitet werden. Bitte versuche ein anderes Foto.');
   });
   input.click();
 }
@@ -838,39 +915,70 @@ function wireCropper(src){
   viewport.addEventListener('touchmove', onMove, {passive:false});
   viewport.addEventListener('touchend', onUp);
 
-  document.getElementById('cropCancelBtn').addEventListener('click', closeModal);
-  document.getElementById('cropDoneBtn').addEventListener('click', (e)=>withLock(e.currentTarget, async ()=>{
-    if(!ready){ toast('Bitte warte, bis das Bild geladen ist.'); return; }
+  function renderCrop(outW){
+    const outH = Math.round(outW*VH/VW);
     const scale = baseScale*z;
     // desired source region in image coordinates (may extend past the image edges)
     const sx = -ox/scale, sy = -oy/scale, sW = VW/scale, sH = VH/scale;
-    const outW = 1400, outH = Math.round(1400*VH/VW);
     const canvas = document.createElement('canvas');
     canvas.width = outW; canvas.height = outH;
-    try {
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#151310';
-      ctx.fillRect(0, 0, outW, outH);
-      // clip the source rect to the real image bounds and map it to the matching
-      // destination area — iOS Safari renders nothing if the source rect overflows
-      const cL = Math.max(0, sx), cT = Math.max(0, sy);
-      const cR = Math.min(NW, sx+sW), cB = Math.min(NH, sy+sH);
-      if(cR > cL && cB > cT){
-        const dx = (cL - sx)/sW*outW, dy = (cT - sy)/sH*outH;
-        const dW = (cR - cL)/sW*outW, dH = (cB - cT)/sH*outH;
-        ctx.drawImage(img, cL, cT, cR-cL, cB-cT, dx, dy, dW, dH);
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#151310';
+    ctx.fillRect(0, 0, outW, outH);
+    // clip the source rect to the real image bounds and map it to the matching
+    // destination area — iOS Safari renders nothing if the source rect overflows
+    const cL = Math.max(0, sx), cT = Math.max(0, sy);
+    const cR = Math.min(NW, sx+sW), cB = Math.min(NH, sy+sH);
+    let photoRect = { dx:0, dy:0, dW:0, dH:0 };
+    if(cR > cL && cB > cT){
+      const dx = (cL - sx)/sW*outW, dy = (cT - sy)/sH*outH;
+      const dW = (cR - cL)/sW*outW, dH = (cB - cT)/sH*outH;
+      photoRect = { dx, dy, dW, dH };
+      // draw in horizontal strips of the destination — the single-shot version
+      // of this draw is where iOS Safari has been seen to silently corrupt
+      // large photos into a partially black image
+      const stepH = 200;
+      for(let y=0; y<dH; y+=stepH){
+        const h = Math.min(stepH, dH-y);
+        const srcY = cT + (y/dH)*(cB-cT);
+        const srcH = (h/dH)*(cB-cT);
+        ctx.drawImage(img, cL, srcY, cR-cL, srcH, dx, dy+y, dW, h);
       }
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-      const { data, error } = await sb.rpc('rpc_add_gallery_image', { p_token: session.token, p_image_data: dataUrl });
-      if(error || !data || data.error){
-        toast(data && data.error==='limit_reached' ? 'Maximal 20 Bilder möglich.' : 'Hinzufügen fehlgeschlagen.');
-        return;
-      }
-      await loadGallery(); carouselIndex = GALLERY.length-1; closeModal(); renderView();
-      toast('Bild hinzugefügt');
-    } catch(err){
-      toast('Bild konnte nicht verarbeitet werden. Versuche ein anderes Foto.');
     }
+    return { canvas, outW, outH, photoRect };
+  }
+
+  function verifyCrop(canvas, outW, outH, photoRect){
+    if(photoRect.dW < 2 || photoRect.dH < 2) return false;
+    const ctx = canvas.getContext('2d');
+    // shrink the sampled region slightly inward so edge anti-aliasing
+    // against the fill color doesn't trip the check
+    const margin = 2;
+    const rx = photoRect.dx+margin, ry = photoRect.dy+margin;
+    const rw = Math.max(1, photoRect.dW-margin*2), rh = Math.max(1, photoRect.dH-margin*2);
+    return !hasContiguousBlankBand(ctx, outW, outH, rx, ry, rw, rh, 0x15,0x13,0x10);
+  }
+
+  document.getElementById('cropCancelBtn').addEventListener('click', closeModal);
+  document.getElementById('cropDoneBtn').addEventListener('click', (e)=>withLock(e.currentTarget, async ()=>{
+    if(!ready){ toast('Bitte warte, bis das Bild geladen ist.'); return; }
+    const attempts = [1400, 1000, 700];
+    for(let i=0; i<attempts.length; i++){
+      try {
+        const { canvas, outW, outH, photoRect } = renderCrop(attempts[i]);
+        if(!verifyCrop(canvas, outW, outH, photoRect)) continue;
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        const { data, error } = await sb.rpc('rpc_add_gallery_image', { p_token: session.token, p_image_data: dataUrl });
+        if(error || !data || data.error){
+          toast(data && data.error==='limit_reached' ? 'Maximal 20 Bilder möglich.' : 'Hinzufügen fehlgeschlagen.');
+          return;
+        }
+        await loadGallery(); carouselIndex = GALLERY.length-1; closeModal(); renderView();
+        toast('Bild hinzugefügt');
+        return;
+      } catch(err){ /* try next, smaller size */ }
+    }
+    toast('Bild konnte nicht verarbeitet werden. Versuche ein anderes Foto.');
   }));
 }
 
