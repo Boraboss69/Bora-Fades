@@ -135,7 +135,7 @@ a{color:inherit;}
 .carousel{position:relative;width:100%;aspect-ratio:4/3;border-radius:var(--radius);overflow:hidden;margin-bottom:22px;border:1px solid var(--border);background:var(--bg-alt);}
 .carousel-track{display:flex;height:100%;transition:transform .45s ease;touch-action:pan-y;}
 .carousel-slide{min-width:100%;height:100%;flex-shrink:0;background:var(--bg-alt);-webkit-transform:translateZ(0);transform:translateZ(0);-webkit-backface-visibility:hidden;backface-visibility:hidden;}
-.carousel-slide img{width:100%;height:100%;object-fit:contain;display:block;-webkit-transform:translateZ(0);transform:translateZ(0);-webkit-backface-visibility:hidden;backface-visibility:hidden;}
+.carousel-slide canvas{width:100%;height:100%;object-fit:contain;display:block;-webkit-transform:translateZ(0);transform:translateZ(0);-webkit-backface-visibility:hidden;backface-visibility:hidden;}
 .carousel-arrow{position:absolute;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;border:none;background:rgba(13,12,10,.55);color:#fff;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px);z-index:2;}
 .carousel-arrow svg{width:20px;height:20px;}
 .carousel-arrow:hover{background:rgba(13,12,10,.8);}
@@ -686,7 +686,7 @@ function galleryCarousel(){
     return `<div class="carousel-empty" id="galleryAddEmpty">${ICONS.image}<div>Bilder hinzufügen</div></div>`;
   }
   if(carouselIndex >= GALLERY.length) carouselIndex = 0;
-  const slides = GALLERY.map(g=>`<div class="carousel-slide"><img src="${g.image}" alt=""></div>`).join('');
+  const slides = GALLERY.map((g,i)=>`<div class="carousel-slide"><canvas data-slide-canvas="${i}"></canvas></div>`).join('');
   const dots = GALLERY.map((g,i)=>`<span class="${i===carouselIndex?'active':''}" data-carousel-dot="${i}"></span>`).join('');
   const arrows = GALLERY.length>1 ? `
     <button class="carousel-arrow left" data-carousel-prev>${ICONS.chevL}</button>
@@ -994,6 +994,37 @@ function wireCropper(src){
   }));
 }
 
+// Paint each gallery slide via a manual software decode + canvas draw
+// instead of a plain <img src="data:..."> — a photo saved by this app that
+// displays fine everywhere else has still shown up cut cleanly in half
+// (solid black) specifically in this carousel on iPhone Safari, which
+// points at that browser's accelerated <img> decode/paint path for large
+// inline photos rather than at the stored data itself. Decoding through
+// createImageBitmap/canvas uses the same software path already proven
+// reliable during upload verification, sidestepping whatever is broken in
+// the native image element's rendering here.
+async function paintCarouselCanvases(carousel){
+  const canvases = carousel.querySelectorAll('[data-slide-canvas]');
+  for(const canvas of canvases){
+    const idx = Number(canvas.dataset.slideCanvas);
+    const g = GALLERY[idx];
+    if(!g) continue;
+    try {
+      let bmp;
+      if(typeof createImageBitmap === 'function'){
+        try { bmp = await createImageBitmap(await (await fetch(g.image)).blob()); } catch(e){ bmp = null; }
+      }
+      const src = bmp || await loadImg(g.image);
+      const w = bmp ? bmp.width : src.naturalWidth;
+      const h = bmp ? bmp.height : src.naturalHeight;
+      if(!w || !h) continue;
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(src, 0, 0, w, h);
+      if(bmp && bmp.close) bmp.close();
+    } catch(e){ /* leave this slide blank rather than show a broken image */ }
+  }
+}
+
 function wireCarousel(){
   clearInterval(carouselTimer); carouselTimer = null;
   const addEmpty = document.getElementById('galleryAddEmpty');
@@ -1004,6 +1035,7 @@ function wireCarousel(){
   if(!carousel) return;
   const track = document.getElementById('carouselTrack');
   void carousel.offsetHeight; // force a reflow so iOS Safari repaints the new slide fully
+  paintCarouselCanvases(carousel);
   const del = carousel.querySelector('[data-carousel-del]');
   function go(i){
     carouselIndex = (i + GALLERY.length) % GALLERY.length;
