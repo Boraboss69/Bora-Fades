@@ -18,12 +18,14 @@
   --text:#f3ede1; --text-muted:#9c9284; --text-faint:#665f52;
   --green:#5a9a6f; --green-bg:rgba(90,154,111,.14);
   --yellow:#d6a23c; --yellow-bg:rgba(214,162,60,.14);
-  --red:#b5573d; --red-bg:rgba(181,87,61,.16);
+  --red:#8a3247; --red-bg:rgba(138,50,71,.18);
+  --cream:#d9c7b3; --cream-dim:rgba(217,199,179,.5);
   --radius:14px; --shadow:0 12px 32px rgba(0,0,0,.45);
 }
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0;}
-body{background:radial-gradient(ellipse 900px 500px at 15% -10%, rgba(198,161,91,.08), transparent 60%),var(--bg);color:var(--text);font-family:'Manrope',sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased;}
+body{background:radial-gradient(ellipse 900px 500px at 15% -10%, rgba(198,161,91,.08), transparent 60%),var(--bg);color:var(--text);font-family:'Manrope',sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased;position:relative;}
+body::before{content:"";position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.05;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");background-repeat:repeat;}
 h1,h2,h3,.display{font-family:'Fraunces',serif;}
 button{font-family:inherit;cursor:pointer;}
 input,select,textarea{font-family:inherit;}
@@ -89,23 +91,29 @@ a{color:inherit;}
 .who-text small{color:var(--text-faint);font-size:10.5px;}
 
 .main{flex:1;min-width:0;padding:30px 34px 60px;max-width:1100px;}
+@keyframes viewFadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+#viewRoot.fade-in{animation:viewFadeIn .28s ease;}
 .topbar{display:none;}
 .page-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:26px;flex-wrap:wrap;gap:14px;}
-.page-head h2{font-size:26px;font-weight:500;margin:0;}
-.page-head p{color:var(--text-muted);font-size:13.5px;margin:4px 0 0;}
+.page-head h2{font-size:31px;font-weight:500;margin:0;letter-spacing:-.01em;}
+.page-head p{color:var(--text-muted);font-size:13.5px;margin:5px 0 0;}
 
 .grid{display:grid;gap:16px;}
 .grid-3{grid-template-columns:repeat(3,1fr);}
 .grid-2{grid-template-columns:2fr 1fr;}
 @media(max-width:880px){.grid-3{grid-template-columns:1fr 1fr;}.grid-2{grid-template-columns:1fr;}}
 
-.card{background:linear-gradient(180deg,var(--surface),var(--bg-alt));border:1px solid var(--border);border-radius:var(--radius);padding:20px;}
+.card{position:relative;background:linear-gradient(180deg,var(--surface),var(--bg-alt));border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:inset 0 1px 0 rgba(198,161,91,.16);transition:transform .18s ease,box-shadow .18s ease;}
+@media(hover:hover) and (pointer:fine){
+  .card:hover{transform:translateY(-2px);box-shadow:inset 0 1px 0 rgba(198,161,91,.28),0 14px 28px rgba(0,0,0,.35);}
+}
 .stat-card{padding:18px 20px;}
 .stat-card .stat-label{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-faint);font-weight:700;margin-bottom:10px;}
-.stat-card .stat-value{font-family:'Fraunces',serif;font-size:30px;font-weight:500;color:var(--gold-bright);}
+.stat-card .stat-value{font-family:'Fraunces',serif;font-size:34px;font-weight:500;color:var(--gold-bright);letter-spacing:-.01em;}
 .stat-card .stat-sub{font-size:12px;color:var(--text-muted);margin-top:4px;}
 
-.section-title{font-size:15px;font-weight:700;margin:0 0 14px;display:flex;align-items:center;justify-content:space-between;}
+.section-title{font-size:15px;font-weight:700;margin:0 0 14px;padding-bottom:12px;display:flex;align-items:center;justify-content:space-between;position:relative;}
+.section-title::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:linear-gradient(90deg,var(--gold-dim),transparent 65%);}
 .section-title span.tag{font-size:11px;background:var(--surface-2);color:var(--text-muted);padding:3px 9px;border-radius:20px;font-weight:600;}
 
 .list-row{display:flex;align-items:center;gap:12px;padding:12px 10px;border-radius:10px;border-bottom:1px solid var(--border);}
@@ -119,7 +127,8 @@ a{color:inherit;}
 .pill-green{background:var(--green-bg);color:#8bd6a2;} .pill-yellow{background:var(--yellow-bg);color:#eec168;} .pill-red{background:var(--red-bg);color:#e5947c;} .pill-gray{background:var(--surface-2);color:var(--text-muted);}
 
 .empty-state{padding:34px 18px;text-align:center;color:var(--text-faint);font-size:13px;}
-.empty-state svg{width:34px;height:34px;margin-bottom:10px;opacity:.5;}
+.empty-state .empty-icon{width:56px;height:56px;border-radius:50%;background:radial-gradient(circle at 35% 30%,rgba(198,161,91,.14),transparent 70%);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;}
+.empty-state svg{width:24px;height:24px;opacity:.6;}
 
 .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
 .cal-head .month-label{font-family:'Fraunces',serif;font-size:19px;font-weight:500;}
@@ -140,7 +149,7 @@ a{color:inherit;}
 .carousel{position:relative;width:100%;height:0;padding-bottom:75%;border-radius:var(--radius);overflow:hidden;margin-bottom:22px;border:1px solid var(--border);background:var(--bg-alt);}
 .carousel-track{position:absolute;top:0;left:0;height:100%;display:flex;transition:transform .45s ease;touch-action:pan-y;}
 .carousel-slide{height:100%;flex:none;background:var(--bg-alt);-webkit-transform:translateZ(0);transform:translateZ(0);-webkit-backface-visibility:hidden;backface-visibility:hidden;}
-.carousel-slide canvas{width:100%;height:100%;object-fit:contain;display:block;-webkit-transform:translateZ(0);transform:translateZ(0);-webkit-backface-visibility:hidden;backface-visibility:hidden;}
+.carousel-slide canvas{width:100%;height:100%;object-fit:contain;display:block;-webkit-transform:translateZ(0);transform:translateZ(0);-webkit-backface-visibility:hidden;backface-visibility:hidden;filter:saturate(1.06) contrast(1.03) sepia(.05);}
 .carousel-arrow{position:absolute;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;border:none;background:rgba(13,12,10,.55);color:#fff;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px);z-index:2;}
 .carousel-arrow svg{width:20px;height:20px;}
 .carousel-arrow:hover{background:rgba(13,12,10,.8);}
@@ -423,7 +432,11 @@ document.getElementById('loginForm').addEventListener('submit', async (e)=>{
   }
   session = { token: data.token, role: data.role === 'owner' ? 'owner' : 'kunde', customerId: data.customer_id };
   localStorage.setItem(SESSION_KEY, data.token);
-  if(await refreshState()) enterApp();
+  showSplash();
+  const minDelay = new Promise(r=>setTimeout(r, 500));
+  const [ok] = await Promise.all([refreshState(), minDelay]);
+  if(ok) enterApp();
+  hideSplash();
 });
 
 document.getElementById('forgotLink').addEventListener('click', (e)=>{
@@ -569,7 +582,13 @@ function navConfig(){
   ];
 }
 
-function renderAll(){ renderSidebar(); renderBottomNav(); renderView(); }
+function renderAll(){
+  renderSidebar(); renderBottomNav(); renderView();
+  const root = document.getElementById('viewRoot');
+  root.classList.remove('fade-in');
+  void root.offsetWidth; // restart the animation on every explicit navigation
+  root.classList.add('fade-in');
+}
 
 function renderSidebar(){
   const items = navConfig();
@@ -727,7 +746,7 @@ function apptToIcs(a){
 function icsDownloadHref(a){
   return 'data:text/calendar;charset=utf-8,' + encodeURIComponent(apptToIcs(a));
 }
-function emptyState(msg){ return `<div class="empty-state">${ICONS.empty}<div>${msg}</div></div>`; }
+function emptyState(msg){ return `<div class="empty-state"><div class="empty-icon">${ICONS.empty}</div><div>${msg}</div></div>`; }
 
 function galleryCarousel(){
   const isOwner = session.role === 'owner';
@@ -1734,7 +1753,11 @@ function wireDayDetail(){
 
 function hideSplash(){
   const el = document.getElementById('splashScreen');
-  if(el){ el.classList.add('hide'); setTimeout(()=>el.remove(), 450); }
+  if(el) el.classList.add('hide');
+}
+function showSplash(){
+  const el = document.getElementById('splashScreen');
+  if(el) el.classList.remove('hide');
 }
 
 (async function boot(){
