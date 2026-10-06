@@ -1654,12 +1654,18 @@ function wireRequestModal(){
   const fileInput = document.getElementById('reqImage');
   let imageData = null;
   dropZone.addEventListener('click', ()=>fileInput.click());
-  fileInput.addEventListener('change', ()=>{
+  fileInput.addEventListener('change', async ()=>{
     const f = fileInput.files[0]; if(!f) return;
-    if(f.size > 3*1024*1024){ toast('Bild zu groß (max. 3 MB)'); return; }
-    const reader = new FileReader();
-    reader.onload = ()=>{ imageData = reader.result; const prev=document.getElementById('filePreview'); prev.src=imageData; prev.classList.remove('hidden'); dropZone.textContent='Bild ausgewählt'; };
-    reader.readAsDataURL(f);
+    if(f.size > 8*1024*1024){ toast('Bild zu groß (max. 8 MB)'); return; }
+    try {
+      // downscale/compress like gallery uploads — this used to go straight into
+      // the appointments table as a multi-MB data URL, bloating every state
+      // refresh (including the 18s poll) enough to occasionally time out
+      imageData = await decodeFileToDataUrl(f, 1000);
+      const prev=document.getElementById('filePreview'); prev.src=imageData; prev.classList.remove('hidden'); dropZone.textContent='Bild ausgewählt';
+    } catch(e){
+      toast('Bild konnte nicht verarbeitet werden. Versuche ein anderes Foto.');
+    }
   });
   const styleSelect = document.getElementById('reqStyle');
   const customField = document.getElementById('reqCustomStyleField');
